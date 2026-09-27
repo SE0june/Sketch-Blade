@@ -56,18 +56,51 @@
   .btn:focus-visible{outline:3px solid #fff;outline-offset:2px}
   .btn:active{transform:translateY(2px);box-shadow:0 2px 0 #8a6421}
   small{display:block;margin-top:12px;color:#7f8aa3;font-size:12px;line-height:1.5}
+  .btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none;transform:none}
+  .cls:disabled{opacity:.5;cursor:not-allowed}
+  .unlock{background:#3a2350;border:2px solid #b57bff;border-radius:6px;padding:10px 12px;color:#f0e0ff !important}
+  #title{position:fixed;inset:0;background:#0f1320;overflow:hidden}
+  #title[hidden]{display:none}
+  #mapc{position:absolute;inset:0;width:100%;height:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+  .t-head{position:absolute;left:24px;top:16px;pointer-events:none}
+  .t-head h1{font-family:"Black Han Sans","Noto Sans KR",sans-serif;font-weight:400;font-size:54px;line-height:1;margin:4px 0 0;color:#fff;
+    text-shadow:4px 4px 0 #1f2230,-3px -3px 0 #1f2230,3px -3px 0 #1f2230,-3px 3px 0 #1f2230,0 8px 18px rgba(0,0,0,.45)}
+  .t-head .eyebrow{text-shadow:2px 2px 0 #1f2230}
+  .t-tabs{position:absolute;left:24px;top:100px;display:flex;gap:8px;flex-wrap:wrap}
+  .tab{font-family:"Black Han Sans","Noto Sans KR",sans-serif;font-size:18px;padding:7px 14px 8px;border:2px solid #1f2230;border-radius:6px;
+    background:#2c3448;color:#e9ecf3;box-shadow:0 4px 0 #151a26;cursor:pointer;text-align:left;line-height:1.1}
+  .tab .sub{display:block;font-family:"Noto Sans KR",sans-serif;font-size:10px;font-weight:700;letter-spacing:.14em;opacity:.75}
+  .tab[aria-pressed="true"]{background:#e0aa3e;color:#1f2230;box-shadow:0 4px 0 #8a6421}
+  .tab.locked:not([aria-pressed="true"]){background:#2a2238;color:#b8a8d0}
+  .tab:focus-visible{outline:3px solid #fff;outline-offset:2px}
+  .t-side{position:absolute;right:16px;top:16px;bottom:16px;width:370px;max-width:none;margin:0;overflow:auto}
+  .stagecard{background:#232b3d;border:1px solid #2f3a52;border-radius:6px;padding:12px 14px;margin:0 0 12px}
+  .stagecard h2{font-family:"Black Han Sans","Noto Sans KR",sans-serif;font-weight:400;font-size:30px;margin:4px 0 6px;color:#fff}
+  .stagecard p{margin:0 0 4px;color:#b9c1d3;font-size:13px;line-height:1.55}
+  .stagecard .boss b{color:#ff9a8a}
+  @media (max-width:860px){
+    .t-head{left:14px;top:10px} .t-head h1{font-size:34px} .t-tabs{left:14px;top:62px} .tab{font-size:15px;padding:5px 10px 6px}
+    .t-side{left:8px;right:8px;top:auto;bottom:8px;width:auto;max-height:50vh;padding:14px}
+    .t-side .keys,.t-side small{display:none}
+  }
 </style>
 </head>
 <body>
 
 <div id="wrap"><canvas id="game"></canvas></div>
 <div id="ui"><div class="panel" id="panel"></div></div>
+<div id="title" hidden>
+  <canvas id="mapc"></canvas>
+  <div class="t-head"><div class="eyebrow" id="teyebrow"></div><h1>쌈@뽕 검사</h1></div>
+  <div class="t-tabs" id="ttabs"></div>
+  <aside class="panel t-side" id="tside"></aside>
+</div>
 
 <script>
 (() => {
 const W = 1280, H = 720;
 const cv = document.getElementById('game');
-const ctx = cv.getContext('2d');
+let ctx = cv.getContext('2d');
 const ui = document.getElementById('ui'), panel = document.getElementById('panel');
 let scale = 1, dpr = Math.min(window.devicePixelRatio || 1, 2);
 
@@ -153,6 +186,405 @@ function sfx(k) {
   } catch (e) {}
 }
 
+// ---------- music (procedural, WebAudio) ----------
+const TRACKS = {
+  field: { name: '던전', bpm: 92, chords: ['Dm', 'Bb', 'Gm', 'A', 'Dm', 'Bb', 'Gm', 'A'],
+    pad: { type: 'violinPad', vol: 0.03 },
+    bass: { wave: 'pianoBass', pat: 'R . . . . . . . R . . . 5 . . .', vol: 0.1 },
+    arp: { pat: '0 . . 2 . . 1 . . 2 . . 3 . . .', vol: 0.04, wave: 'piano', oct: 4 },
+    lead: { wave: 'violin', vol: 0.05, echo: 0, notes: [
+      'A4 - - - F4 - - - E4 - D4 - - - - -', 'D4 - - - F4 - - - Bb4 - - - A4 - - -',
+      'G4 - - - - - Bb4 - A4 - G4 - F4 - - -', 'E4 - - - - - - - C#5 - - - - - - -',
+      'A4 - - - D5 - - - C5 - Bb4 - A4 - - -', 'F4 - - - - - D4 - F4 - Bb4 - - - - -',
+      'G4 - A4 - Bb4 - - - A4 - G4 - F4 - E4 -', 'D4 - - - - - - - . . . . . . . .'] },
+    drums: { T: 'x.......x.......', vol: 0.4 } },
+  // 보스 음악은 아래 FILE_TRACKS 에 보스별로 추가 (없는 보스는 필드음 유지)
+};
+// 배경음악 전체 볼륨 (0 ~ 1)
+const MUSIC_VOL = 0.55;
+// 음악 파일로 재생할 곡. 앞에서부터 차례로 시도하고, 모두 실패하면 코드로 만든 곡을 재생해요.
+// void.mp3 를 index.html 과 같은 곳(GitHub 저장소)에 올리면 그 파일이 재생돼요.
+// 예: kairos: { vol: 0.6, src: ['void.mp3'] }
+const FILE_TRACKS = {};
+const MUSIC = (() => {
+  const NN = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const midi = s => { const m = /^([A-G])([#b]?)(-?\d)$/.exec(s); if (!m) throw new Error('bad note ' + s); return 12 * (+m[3] + 1) + NN[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0); };
+  const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+  const chordNotes = (name, oct) => { const m = /^([A-G][#b]?)(m?)$/.exec(name); const r = midi(m[1] + oct); return [r, r + (m[2] ? 3 : 4), r + 7]; };
+  function parseLine(str) {
+    const toks = str.trim().split(/\s+/), ev = new Array(toks.length).fill(null); let last = -1;
+    toks.forEach((t, i) => { if (t === '-') { if (last >= 0) ev[last].d++; } else if (t === '.') last = -1; else { ev[i] = { m: midi(t), d: 1 }; last = i; } });
+    return ev;
+  }
+  // ---- 곡 구성기: 구간별로 한 마디씩 연주 계획(plan)을 만들어요 ----
+  const SCALES = { minor: [0, 2, 3, 5, 7, 8, 10], harm: [0, 2, 3, 5, 7, 8, 11], phryd: [0, 1, 4, 5, 7, 8, 10], dorian: [0, 2, 3, 5, 7, 9, 10] };
+  const RHY = {
+    fast: ['x-x-x-x-xxx-x---', 'x---x-x-x-x-x---', 'x-xxx-x-x---x-x-', 'x---x---x-x-xxxx', 'x-x-x---x-xxx---'],
+    mid: ['x---x---x-x-x---', 'x-----x-x---x---', 'x---x-x-x-------', 'x-x-x---x---x---'],
+    slow: ['x-------x-------', 'x-----x-x-------', 'x---x---x-------', 'x-------x---x---'],
+  };
+  const rngOf = seed => { let a = seed >>> 0; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
+  const pc = m => ((m % 12) + 12) % 12;
+  const scaleSet = (key, sc) => { const r = pc(midi(key + '4')); return new Set(SCALES[sc].map(x => (x + r) % 12)); };
+  const snap = (m, set) => { for (let d = 0; d < 6; d++) { if (set.has(pc(m + d))) return m + d; if (set.has(pc(m - d))) return m - d; } return m; };
+  const stepScale = (m, dir, set) => { let x = m + dir; while (!set.has(pc(x))) x += dir; return x; };
+  const tonesIn = (name, lo, hi) => { const pcs = chordNotes(name, 3).map(pc), out = []; for (let m = lo; m <= hi; m++) if (pcs.includes(pc(m))) out.push(m); return out; };
+  const nearest = (arr, m) => arr.reduce((a, b) => Math.abs(b - m) < Math.abs(a - m) ? b : a);
+  const emptyBar = () => new Array(16).fill(null);
+  const shiftBar = (ev, n) => ev.map(e => e ? { m: e.m + n, d: e.d } : null);
+  function genBars(chords, o) {
+    const bars = [], rh = [], src = []; let prev = Math.round((o.lo + o.hi) / 2);
+    chords.forEach((ch, bi) => {
+      const last = o.endLong && bi === chords.length - 1, reuse = !last && bi % 4 >= 2 && src[bi - 2];
+      const r = last ? 'x-------x-------' : reuse ? rh[bi - 2] : RHY[o.style][Math.floor(o.rng() * RHY[o.style].length)];
+      rh[bi] = r;
+      const ev = emptyBar(), tones = tonesIn(ch, o.lo, o.hi), notes = []; let k = 0;
+      for (let j = 0; j < 16; j++) {
+        if (r[j] !== 'x') continue;
+        let m;
+        if (last) m = k === 0 ? nearest(tones.filter(x => pc(x) === pc(chordNotes(ch, 3)[0])), prev) : nearest(tones, prev + 5);
+        else if (reuse && src[bi - 2][k] !== undefined) { const s0 = src[bi - 2]; const shift = nearest(tones, s0[0]) - s0[0]; m = k === 0 ? s0[0] + shift : snap(s0[k] + shift, o.set); }
+        else if (j % 4 === 0) { const near = tones.filter(x => Math.abs(x - prev) <= 7), pool = near.length ? near : tones; m = o.rng() < 0.5 ? nearest(pool, prev) : pool[Math.floor(o.rng() * pool.length)]; }
+        else { const dir = prev > o.hi - 3 ? -1 : prev < o.lo + 3 ? 1 : (o.rng() < 0.5 ? -1 : 1); m = stepScale(prev, dir, o.set); if (o.rng() < 0.3) m = stepScale(m, dir, o.set); }
+        m = Math.max(o.lo, Math.min(o.hi, m)); if (!o.set.has(pc(m))) m = snap(m, o.set);
+        if (m === prev && !last && !reuse) { m = stepScale(prev, prev > o.hi - 2 ? -1 : prev < o.lo + 2 ? 1 : (o.rng() < 0.5 ? -1 : 1), o.set); }
+        let d = 1; while (j + d < 16 && r[j + d] === '-') d++;
+        ev[j] = { m, d }; notes.push(m); prev = m; k++;
+      }
+      src[bi] = notes; bars.push(ev);
+    });
+    return bars;
+  }
+  function runBar(ch, set, from = 8, down = false) {
+    const ev = emptyBar(); let m = chordNotes(ch, down ? 6 : 4)[0];
+    for (let j = from; j < 16; j++) { ev[j] = { m, d: 1 }; m = stepScale(m, down ? -1 : 1, set); }
+    return ev;
+  }
+  function counterBar(ch) { const c = chordNotes(ch, 5), ev = emptyBar(); ev[0] = { m: c[1], d: 8 }; ev[8] = { m: c[2], d: 8 }; return ev; }
+  const barLines = arr => arr.map(parseLine);
+  function buildSong(T) {
+    const S = T.song, rng = rngOf(S.seed || 7), set = scaleSet(S.key, S.scale), V = S.vol, plan = [];
+    const theme = barLines(S.theme), A = S.A.length === 4 ? S.A.concat(S.A) : S.A, main = S.drums, alt = S.alt || main;
+    const other = w => w === 'violin' ? 'piano' : 'violin';
+    const push = (ch, o) => plan.push(Object.assign({ chord: ch, lead: null, leadWave: S.leadA, leadVol: V.lead, extra: [], arp: true, arpW: S.arpA, bass: true, pad: false, drums: main, hit: false, fill: false, roll: false }, o));
+    // 도입
+    push(A[0], { bass: false, pad: true, drums: { T: 'x.......x.......' } });
+    push(A[1], { bass: false, pad: true, drums: { T: 'x...x...x...x...' }, roll: true, extra: [{ w: 'piano', v: V.run, ev: runBar(A[1], set) }] });
+    // 테마
+    for (let b = 0; b < 8; b++) {
+      const ev = theme[b % theme.length], second = theme.length === 4 && b >= 4;
+      push(A[b], { lead: ev, hit: b % 4 === 0, fill: b === 7, extra: second ? [{ w: other(S.leadA), v: V.dbl, ev: shiftBar(ev, S.leadA === 'violin' ? -12 : 12) }] : [] });
+    }
+    // 전개
+    const gB = S.bLead ? barLines(S.bLead) : genBars(S.B, { rng, set, lo: S.range[0], hi: S.range[1], style: S.styleB || 'fast', endLong: true });
+    const bx = S.bExtra ? barLines(S.bExtra) : null;
+    S.B.forEach((ch, b) => push(ch, { lead: gB[b], leadWave: S.leadB, leadVol: V.leadB || V.lead, arpW: S.arpB || S.arpA, pad: true, drums: alt, hit: b === 0 || b === 4, fill: b === 7,
+      extra: bx ? [{ w: 'piano', v: V.extra || V.run, ev: bx[b] }] : (b === 3 || b === 7 ? [{ w: 'piano', v: V.run, ev: runBar(ch, set) }] : []) }));
+    // 숨고르기
+    const gC = genBars(S.C, { rng, set, lo: S.range[0] + 3, hi: S.range[1] + 3, style: 'slow', endLong: false });
+    S.C.forEach((ch, b) => push(ch, { lead: gC[b], leadWave: 'violin', leadVol: V.lead * 0.9, arpW: { wave: 'piano', pat: '0 . 1 . 2 . 3 . 2 . 1 . 0 . 1 .', oct: 4, vol: 0.035 },
+      bass: false, pad: true, drums: b === 3 ? { T: 'x...x...x...x...' } : {}, roll: b === 3, extra: b === 3 ? [{ w: 'piano', v: V.run, ev: runBar(ch, set) }] : [] }));
+    // 클라이맥스
+    for (let b = 0; b < 8; b++) {
+      const ev = shiftBar(theme[b % theme.length], S.climaxUp ? 12 : 0);
+      const ex = [{ w: 'violin', v: V.counter, ev: counterBar(A[b]) }];
+      if (S.leadA === 'violin') ex.push({ w: 'piano', v: V.dbl, ev: shiftBar(ev, -12) });
+      if (b === 3 || b === 7) ex.push({ w: 'piano', v: V.run, ev: runBar(A[b], set, 12) });
+      push(A[b], { lead: ev, pad: true, hit: b % 2 === 0, fill: b === 7, extra: ex });
+    }
+    // 마무리
+    const endLead = emptyBar(); endLead[0] = { m: chordNotes(A[0], 5)[0], d: 16 };
+    push(A[0], { lead: endLead, leadWave: 'violin', hit: true, extra: [{ w: 'piano', v: V.run, ev: runBar(A[0], set, 0) }] });
+    const endLead2 = emptyBar(); endLead2[0] = { m: chordNotes(A[A.length - 1], 5)[2], d: 16 };
+    push(A[A.length - 1], { lead: endLead2, leadWave: 'violin', fill: true, extra: [{ w: 'piano', v: V.run, ev: runBar(A[A.length - 1], set, 0, true) }] });
+    return plan;
+  }
+  function legacyPlan(T) {
+    const lead = T.lead ? barLines(T.lead.notes) : null, ex = T.extra ? T.extra.map(x => barLines(x.notes)) : [];
+    return T.chords.map((ch, b) => ({ chord: ch, lead: lead ? lead[b % lead.length] : null, leadWave: T.lead && T.lead.wave, leadVol: T.lead && T.lead.vol,
+      extra: ex.map((bars, k) => ({ w: T.extra[k].wave, v: T.extra[k].vol, ev: bars[b % bars.length] })), arp: !!T.arp, arpW: T.arp, bass: !!T.bass, pad: !!T.pad,
+      drums: T.drums || {}, hit: !!T.hit && b % 4 === 0, fill: false, roll: false }));
+  }
+  // ---- 곡 구성기 v2: 직접 작곡한 구간들 + 반주 스타일 ----
+  const ACC = {
+    intro: { lh: 'R . . O . . R . R . . . . . . .', rh: 'c . . c . . c . . . . . . . . .', drums: { k: 'x..x..x.........', T: 'x..x..x.........' } },
+    drive: { lh: 'R . O . R . O . R . O . R . O .', rh: '. . c . . . c . . . c . . . c .', drums: { k: 'x..x..x...x..x..', s: '....x.......x...' } },
+    march: { lh: 'R - - - O - - - R - - - 5 - - -', rh: 'c . . . c . . . c . . . c . c .', drums: { k: 'x...x...x...x...', s: '....x.......x..x', T: 'x.......x.......' } },
+    flow: { lh: 'R . . . 5 . . . O . . . 5 . . .', arp: { wave: 'piano', pat: '0 . 1 . 2 . 3 . 2 . 1 . 2 . 1 .', oct: 4, vol: 0.035 }, drums: { k: 'x.......x.......', s: '....x.......x...' } },
+    lift: { lh: 'R . . . R . . . 5 . . . O . . .', arp: { wave: 'violinStac', pat: '0 . 2 . 1 . 2 . 3 . 2 . 1 . 2 .', oct: 5, vol: 0.026 }, pad: true, drums: { k: 'x...x...x...x...', s: '....x.......x...', T: 'x...............' } },
+    habanera: { lh: 'R . . O . . 5 . R . . O . . 5 .', rh: '. . . c . . . . . . . c . . . .', drums: { k: 'x..x..x.x..x..x.', t: '..x...x...x...x.', s: '....x.......x...' } },
+    tribal: { lh: 'R . . R . . R . . R . R . . R .', rh: '. . c . . . c . . . c . . . c .', drums: { k: 'x..x..x...x..x..', t: '..x.....x..x....', s: '......x.......x.' } },
+    stab: { lh: 'R . R . R . R . R . R . R . R .', rh: 'c . . . c . . . c . . . c . c .', pad: true, drums: { k: 'x...x...x...x...', T: 'x...x...x...x...' } },
+  };
+  const toks = p => p ? p.split(/\s+/) : null;
+  function buildSong2(T) {
+    const S = T.song2, plan = [], secs = S.sections;
+    const add = (o) => plan.push(Object.assign({ tr: 0, lead: null, leadWave: 'violin', leadVol: 0.06, extra: [], lh: null, rh: null, arpW: null, arp: false, pad: false, drums: {}, hit: false, fill: false, roll: false, bass: false }, o));
+    const leadVol = w => w === 'piano' ? 0.085 : 0.06;
+    const section = (sec, tr, final) => {
+      const acc = ACC[sec.acc], lines = sec.notes ? barLines(sec.notes) : null, pl = sec.piano ? barLines(sec.piano) : null, n = sec.chords.length;
+      sec.chords.forEach((ch, b) => {
+        const ex = [];
+        if (pl) ex.push({ w: 'piano', v: 0.065, ev: pl[b] });
+        if (final && lines) { ex.push({ w: sec.lead === 'violin' ? 'piano' : 'violin', v: sec.lead === 'violin' ? 0.04 : 0.032, ev: shiftBar(lines[b], sec.lead === 'violin' ? -12 : 12) }); ex.push({ w: 'violin', v: 0.026, ev: counterBar(ch) }); }
+        add({ chord: ch, tr, lead: lines ? lines[b] : null, leadWave: sec.lead || 'violin', leadVol: leadVol(sec.lead), extra: ex,
+          lh: toks(acc.lh), rh: toks(acc.rh), arpW: acc.arp || null, arp: !!acc.arp, pad: !!acc.pad || final, drums: acc.drums,
+          hit: final ? b % 2 === 0 : (b === 0 || (n === 8 && b === 4)), fill: sec.acc !== 'stab' && b === n - 1, roll: sec.acc === 'stab' && b === n - 1 });
+      });
+    };
+    // 도입 (반복 시 건너뜀)
+    const intro = secs[0];
+    add({ chord: intro.chords[0], lh: toks(ACC.intro.lh), rh: toks(ACC.intro.rh), drums: ACC.intro.drums, hit: true, pad: true });
+    const setK = scaleSet('C', 'minor');
+    add({ chord: intro.chords[1], lh: toks('R . . O . . R . R . R . R R R R'), rh: toks('c . . c . . c . c . c . c c c c'), drums: { k: 'x..x..x.x.x.xxxx' }, roll: true, hit: true, pad: true,
+      extra: [{ w: 'piano', v: 0.06, ev: (() => { const ev = emptyBar(); let m = chordNotes(intro.chords[1], 4)[0]; for (let j = 8; j < 16; j++) { ev[j] = { m, d: 1 }; m += [2, 2, 1, 2, 2, 1, 2, 2][j - 8]; } return ev; })() }] });
+    for (let k = 1; k < secs.length; k++) section(secs[k], 0, false);
+    section(secs[1], S.final || 0, true);
+    return plan;
+  }
+  const prep = {};
+  for (const id in TRACKS) {
+    const T = TRACKS[id], P = {};
+    if (T.song2) { T.drums = { vol: 0.75 }; T.hit = 'orch'; T.pad = { type: 'violinPad', vol: 0.03 }; T.lead = { echo: 0 }; }
+    if (T.song) { T.bass = T.song.bass; T.drums = T.song.drums; T.hit = 'orch'; T.pad = { type: 'violinPad', vol: T.song.vol.pad }; T.lead = { echo: 0.2 }; }
+    if (T.bass) { const toks = T.bass.pat.split(/\s+/); P.bass = toks.map((t, i) => { if (!'R5O'.includes(t)) return null; let d = 1; while (toks[i + d] === '-') d++; return { t, d }; }); }
+    P.plan = T.song2 ? buildSong2(T) : T.song ? buildSong(T) : legacyPlan(T); P.loopStart = T.song2 ? 2 : 0;
+    for (const B of P.plan) if (B.arpW && !B.arpW._p) { B.arpW._p = B.arpW.pat.split(/\s+/); if (B.arpW.comp) B.arpW._c = B.arpW.comp.split(/\s+/); }
+    prep[id] = P;
+  }
+  let revIn = null, master = null, echo = null, cur = null, timer = null, mute = false;
+  function ensure() {
+    if (!AC) return false;
+    if (master) return true;
+    master = AC.createGain(); master.gain.value = mute ? 0 : MUSIC_VOL;
+    const comp = AC.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 6; comp.attack.value = 0.004; comp.release.value = 0.2;
+    master.connect(comp).connect(AC.destination);
+    echo = AC.createDelay(1); echo.delayTime.value = 0.3;
+    const fb = AC.createGain(); fb.gain.value = 0.32; const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200;
+    echo.connect(lp).connect(fb).connect(echo); lp.connect(master);
+    revIn = AC.createGain(); const revLp = AC.createBiquadFilter(); revLp.type = 'lowpass'; revLp.frequency.value = 6500;
+    const conv = AC.createConvolver(); const len = Math.floor(AC.sampleRate * 2.6), ir = AC.createBuffer(2, len, AC.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) { const k = i / len; d[i] = (Math.random() * 2 - 1) * Math.pow(1 - k, 3.4) * Math.min(1, i / (AC.sampleRate * 0.012)); } }
+    conv.buffer = ir; const revOut = AC.createGain(); revOut.gain.value = 0.6;
+    revIn.connect(revLp).connect(conv).connect(revOut).connect(master);
+    timer = setInterval(tick, 25);
+    return true;
+  }
+  function env(g, t, a, peak, dur, rel) {
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + a);
+    g.gain.setValueAtTime(peak, t + Math.max(a, dur)); g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(a, dur) + rel);
+    return t + Math.max(a, dur) + rel + 0.05;
+  }
+  function osc(type, f, t, end, out, detune = 0) { const o = AC.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, t); o.detune.value = detune; o.connect(out); o.start(t); o.stop(end); return o; }
+  const ACOUSTIC = new Set(['piano', 'pianoBass', 'violin', 'violinStac', 'violinPad']);
+  function acoustic(kind, f, t, dur, vol, out) {
+    const g = AC.createGain(); g.connect(out);
+    const rs = AC.createGain(); rs.gain.value = kind === 'violinStac' ? 0.28 : 0.4; g.connect(rs); rs.connect(revIn);
+    let end;
+    if (kind === 'piano' || kind === 'pianoBass') {
+      // 그랜드 피아노: 배음마다 따로 사라지고(높은 배음이 먼저), 두 줄 현의 미세한 어긋남 + 해머 소리
+      const lo = kind === 'pianoBass', T60 = Math.max(0.9, Math.min(5, 4.4 - Math.log2(f / 55) * 0.75));
+      const rel = t + Math.max(0.14, dur); end = rel + 0.7;
+      const flt = AC.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.setValueAtTime(Math.min(11000, 2200 + f * 8), t); flt.frequency.setTargetAtTime(Math.min(6500, 1000 + f * 3), t, 0.3); flt.connect(g);
+      const peak = vol * 0.42;
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + 0.002); g.gain.setTargetAtTime(0.0001, rel, 0.1);
+      for (let n = 1; n <= 8; n++) {
+        const fn = n * f * Math.sqrt(1 + 0.00035 * n * n); if (fn > 9500) break;
+        const pg = AC.createGain(), amp = (n === 1 ? (lo ? 1.2 : 1) : 0.85 / Math.pow(n, 1.1));
+        pg.gain.setValueAtTime(amp, t); pg.gain.setTargetAtTime(0.0001, t + 0.004, T60 / (6.9 * (1 + (n - 1) * 0.6))); pg.connect(flt);
+        const o = AC.createOscillator(); o.frequency.value = fn; o.connect(pg); o.start(t); o.stop(end);
+        if (n <= 2) { const o2 = AC.createOscillator(); o2.frequency.value = fn; o2.detune.value = n === 1 ? 1.7 : -1.3; o2.connect(pg); o2.start(t); o2.stop(end); }
+      }
+      const nz = AC.createBufferSource(); nz.buffer = noiseBuf; const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = Math.min(5000, f * 4 + 1200); bp.Q.value = 0.8;
+      const hg = AC.createGain(); hg.gain.setValueAtTime(vol * 0.3, t); hg.gain.exponentialRampToValueAtTime(0.0001, t + 0.025); nz.connect(bp).connect(hg).connect(g); nz.start(t); nz.stop(t + 0.04);
+    } else {
+      // 바이올린: 현악 합주(여러 줄 살짝 어긋남) + 몸통 울림 EQ + 활 긋는 소리 + 늦게 들어오는 비브라토
+      const stac = kind === 'violinStac', pad = kind === 'violinPad';
+      const a = stac ? 0.016 : pad ? 0.4 : 0.085, r = stac ? 0.1 : pad ? 0.5 : 0.26, sus = stac ? 0.04 : Math.max(0.05, dur - (pad ? 0.2 : 0.03));
+      const dets = pad ? [-10, -3, 4, 11] : stac ? [-6, 6] : [-7, 0, 7], peak = vol * (stac ? 0.7 : 0.55) / Math.sqrt(dets.length / 2);
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + a); g.gain.setValueAtTime(peak, t + a + sus); g.gain.exponentialRampToValueAtTime(0.0001, t + a + sus + r); end = t + a + sus + r + 0.05;
+      const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 190;
+      const b1 = AC.createBiquadFilter(); b1.type = 'peaking'; b1.frequency.value = 290; b1.Q.value = 2; b1.gain.value = 5;
+      const b2 = AC.createBiquadFilter(); b2.type = 'peaking'; b2.frequency.value = 1100; b2.Q.value = 1.2; b2.gain.value = -3;
+      const b3 = AC.createBiquadFilter(); b3.type = 'peaking'; b3.frequency.value = 3000; b3.Q.value = 1.4; b3.gain.value = 5;
+      const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = stac ? 4200 : 5000; lp.Q.value = 0.5;
+      hp.connect(b1).connect(b2).connect(b3).connect(lp).connect(g);
+      let lg = null;
+      if (!stac) { const lfo = AC.createOscillator(); lfo.frequency.value = 5.2 + Math.random() * 0.6; lg = AC.createGain(); lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(pad ? 8 : 12, t + Math.min(0.5, a + sus * 0.6)); lfo.connect(lg); lfo.start(t); lfo.stop(end); }
+      for (const dt of dets) { const o = AC.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = dt + (Math.random() - 0.5) * 3; if (lg) lg.connect(o.detune); o.connect(hp); o.start(t + Math.random() * 0.01); o.stop(end); }
+      const nz = AC.createBufferSource(); nz.buffer = noiseBuf; nz.loop = true; const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = Math.min(6000, f * 3); bp.Q.value = 1.2;
+      const ng = AC.createGain(); ng.gain.setValueAtTime(0.0001, t); ng.gain.linearRampToValueAtTime(peak * (stac ? 0.45 : 0.16), t + a * 0.6); ng.gain.exponentialRampToValueAtTime(peak * 0.04, t + a + 0.1); ng.gain.exponentialRampToValueAtTime(0.0001, end);
+      nz.connect(bp).connect(ng).connect(g); nz.start(t); nz.stop(end);
+    }
+    return end;
+  }
+  function voice(kind, f, t, dur, vol, out, send) {
+    if (ACOUSTIC.has(kind) && revIn) return acoustic(kind, f, t, dur, vol, out);
+    const g = AC.createGain(), flt = AC.createBiquadFilter(); flt.type = 'lowpass'; g.connect(out); flt.connect(g);
+    if (send) { const s = AC.createGain(); s.gain.value = send; g.connect(s); s.connect(echo); }
+    let end;
+    switch (kind) {
+      case 'bass': flt.frequency.value = 650; end = env(g, t, 0.006, vol, dur * 0.8, 0.08); osc('sawtooth', f, t, end, flt); osc('square', f / 2, t, end, flt); break;
+      case 'square': flt.frequency.value = 3000; end = env(g, t, 0.005, vol, dur * 0.85, 0.06); osc('square', f, t, end, flt); break;
+      case 'saw': flt.frequency.value = 2600; end = env(g, t, 0.008, vol, dur * 0.85, 0.08); osc('sawtooth', f, t, end, flt, -6); osc('sawtooth', f, t, end, flt, 6); break;
+      case 'triangle': flt.frequency.value = 4000; end = env(g, t, 0.02, vol, dur * 0.9, 0.2); osc('triangle', f, t, end, flt); break;
+      case 'sawtooth': flt.frequency.value = 1800; end = env(g, t, 0.004, vol, 0.02, 0.09); osc('sawtooth', f, t, end, flt); break;
+      case 'pluck': flt.frequency.setValueAtTime(3500, t); flt.frequency.exponentialRampToValueAtTime(500, t + 0.3); end = env(g, t, 0.003, vol, 0.01, Math.min(0.5, dur + 0.2)); osc('sawtooth', f, t, end, flt); break;
+      case 'marimba': flt.frequency.value = 3000; end = env(g, t, 0.002, vol, 0.01, 0.35); osc('sine', f, t, end, flt); osc('sine', f * 4, t, t + 0.06, flt); break;
+      case 'brass': flt.frequency.setValueAtTime(400, t); flt.frequency.linearRampToValueAtTime(1600, t + 0.12); end = env(g, t, 0.05, vol, dur * 0.9, 0.12); osc('sawtooth', f, t, end, flt, -5); osc('sawtooth', f, t, end, flt, 5); break;
+      case 'harp': flt.frequency.value = 5000; end = env(g, t, 0.003, vol, 0.03, Math.min(0.6, dur + 0.15)); osc('square', f, t, end, flt); osc('triangle', f * 2, t, end, flt); break;
+      case 'pad': flt.frequency.value = 1100; end = env(g, t, 0.35, vol, dur - 0.2, 0.4); osc('sawtooth', f, t, end, flt, -9); osc('sawtooth', f, t, end, flt, 9); break;
+      case 'violin': {
+        flt.frequency.value = 3200; end = env(g, t, 0.045, vol, dur * 0.95, 0.18);
+        const lfo = AC.createOscillator(), lg = AC.createGain(); lfo.frequency.value = 6; lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(14, t + Math.min(0.35, dur)); lfo.connect(lg); lfo.start(t); lfo.stop(end);
+        for (const dt of [-7, 7]) { const o = osc('sawtooth', f, t, end, flt, dt); lg.connect(o.detune); }
+        const bp = AC.createBiquadFilter(); bp.type = 'peaking'; bp.frequency.value = 2400; bp.gain.value = 5; flt.disconnect(); flt.connect(bp).connect(g);
+        break;
+      }
+      case 'violinPad': {
+        flt.frequency.value = 2800; end = env(g, t, 0.35, vol, dur - 0.2, 0.45);
+        const lfo = AC.createOscillator(), lg = AC.createGain(); lfo.frequency.value = 5.6; lg.gain.value = 10; lfo.connect(lg); lfo.start(t); lfo.stop(end);
+        for (const dt of [-9, 9]) { const o = osc('sawtooth', f, t, end, flt, dt); lg.connect(o.detune); }
+        break;
+      }
+      case 'pianoBass': {
+        flt.frequency.setValueAtTime(Math.min(4000, f * 10), t); flt.frequency.exponentialRampToValueAtTime(Math.max(200, f * 2), t + 0.6);
+        const rel = Math.min(1.2, 0.3 + dur * 1.1); end = t + rel + 0.05;
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.004); g.gain.exponentialRampToValueAtTime(vol * 0.4, t + 0.2); g.gain.exponentialRampToValueAtTime(0.0001, t + rel);
+        osc('triangle', f, t, end, flt); osc('triangle', f * 2, t, end, flt, 4); osc('sine', f * 0.5, t, end, flt);
+        break;
+      }
+      case 'violinStac': flt.frequency.value = 2600; end = env(g, t, 0.008, vol, 0.03, 0.07); osc('sawtooth', f, t, end, flt, -5); osc('sawtooth', f, t, end, flt, 5); break;
+      case 'cello': flt.frequency.value = 900; end = env(g, t, 0.02, vol, dur * 0.85, 0.1); osc('sawtooth', f, t, end, flt, -4); osc('sawtooth', f, t, end, flt, 4); osc('sine', f / 2, t, end, flt); break;
+      case 'strings': {
+        flt.frequency.value = 1800; end = env(g, t, 0.4, vol, dur - 0.2, 0.5);
+        const lfo = AC.createOscillator(), lg = AC.createGain(); lfo.frequency.value = 5.5; lg.gain.value = 9; lfo.connect(lg); lfo.start(t); lfo.stop(end);
+        for (const dt of [-12, 0, 12]) { const o = osc('sawtooth', f, t, end, flt, dt); lg.connect(o.detune); }
+        break;
+      }
+      case 'piano': {
+        flt.frequency.setValueAtTime(Math.min(9000, f * 8), t); flt.frequency.exponentialRampToValueAtTime(Math.max(300, f * 1.5), t + 0.9);
+        const rel = Math.min(1.4, 0.35 + dur * 1.2); end = t + rel + 0.05;
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.003); g.gain.exponentialRampToValueAtTime(vol * 0.35, t + 0.18); g.gain.exponentialRampToValueAtTime(0.0001, t + rel);
+        osc('triangle', f, t, end, flt); osc('sine', f * 2, t, end, flt, 3); const h3 = AC.createGain(); h3.gain.value = 0.35; h3.connect(flt); osc('sine', f * 3, t, t + 0.4, h3, -2);
+        break;
+      }
+      case 'choir': {
+        flt.frequency.value = 2200; end = env(g, t, 0.18, vol, dur - 0.15, 0.35);
+        const lfo = AC.createOscillator(), lg = AC.createGain(); lfo.frequency.value = 5.2; lg.gain.value = 7; lfo.connect(lg); lfo.start(t); lfo.stop(end);
+        for (const [ty, m, dt] of [['triangle', 1, -8], ['triangle', 1, 8], ['sine', 2, 0]]) { const o = osc(ty, f * m, t, end, flt, dt); lg.connect(o.detune); }
+        break;
+      }
+    }
+  }
+  function drum(kind, t, vol, out) {
+    const g = AC.createGain(); g.connect(out);
+    if (revIn) { const rs = AC.createGain(); rs.gain.value = 0.25; g.connect(rs); rs.connect(revIn); }
+    if (kind === 'B') {
+      const o = AC.createOscillator(); o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.25); g.gain.setValueAtTime(vol * 0.9, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.7); o.connect(g); o.start(t); o.stop(t + 0.75);
+      const n = AC.createBufferSource(); n.buffer = noiseBuf; const nf = AC.createBiquadFilter(); nf.type = 'lowpass'; nf.frequency.value = 300; const ng = AC.createGain(); ng.gain.setValueAtTime(vol * 0.35, t); ng.gain.exponentialRampToValueAtTime(0.001, t + 0.15); n.connect(nf).connect(ng).connect(out); n.start(t); n.stop(t + 0.2);
+      return;
+    }
+    if (kind === 'C') {
+      const n = AC.createBufferSource(); n.buffer = noiseBuf; n.loop = true; const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 4500; const pk = AC.createBiquadFilter(); pk.type = 'peaking'; pk.frequency.value = 7000; pk.gain.value = 4;
+      g.gain.setValueAtTime(vol * 0.16, t); g.gain.exponentialRampToValueAtTime(0.001, t + 1.8); n.connect(hp).connect(pk).connect(g); n.start(t); n.stop(t + 1.9);
+      return;
+    }
+    if (kind === 'k') { const o = AC.createOscillator(); o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.12); g.gain.setValueAtTime(vol * 0.9, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.2); o.connect(g); o.start(t); o.stop(t + 0.22); }
+    else if (kind === 'T') { const o = AC.createOscillator(), f0 = drum.pitch || 65; o.frequency.setValueAtTime(f0 * 1.6, t); o.frequency.exponentialRampToValueAtTime(f0, t + 0.05); g.gain.setValueAtTime(vol * 0.95, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.55); o.connect(g); o.start(t); o.stop(t + 0.6);
+      const n = AC.createBufferSource(); n.buffer = noiseBuf; const nf = AC.createBiquadFilter(); nf.type = 'lowpass'; nf.frequency.value = 500; const ng = AC.createGain(); ng.gain.setValueAtTime(vol * 0.3, t); ng.gain.exponentialRampToValueAtTime(0.001, t + 0.08); n.connect(nf).connect(ng).connect(out); n.start(t); n.stop(t + 0.1); }
+    else if (kind === 't') { const o = AC.createOscillator(); o.frequency.setValueAtTime(220, t); o.frequency.exponentialRampToValueAtTime(90, t + 0.15); g.gain.setValueAtTime(vol * 0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.2); o.connect(g); o.start(t); o.stop(t + 0.22); }
+    else {
+      const n = AC.createBufferSource(); n.buffer = noiseBuf; const f = AC.createBiquadFilter();
+      if (kind === 's') { f.type = 'bandpass'; f.frequency.value = 1800; g.gain.setValueAtTime(vol * 0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.16); const o = AC.createOscillator(); o.frequency.value = 190; const og = AC.createGain(); og.gain.setValueAtTime(vol * 0.3, t); og.gain.exponentialRampToValueAtTime(0.001, t + 0.08); o.connect(og).connect(out); o.start(t); o.stop(t + 0.1); }
+      else if (kind === 'h') { f.type = 'highpass'; f.frequency.value = 7000; g.gain.setValueAtTime(vol * 0.18, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.04); }
+      else { f.type = 'lowpass'; f.frequency.value = 900; g.gain.setValueAtTime(vol * 0.8, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.7); }
+      n.connect(f).connect(g); n.start(t); n.stop(t + 0.8);
+    }
+  }
+  function schedule(c, s, t) {
+    const T = c.T, P = c.P, plan = P.plan, sd = 60 / T.bpm / 4, total = plan.length * 16, ls = (P.loopStart || 0) * 16;
+    const ss = s < total ? s : ls + (s - total) % (total - ls), b = Math.floor(ss / 16), i = ss % 16, B = plan[b], tr = c.tr + (B.tr || 0), out = c.g;
+    const song = !!(T.song || T.song2);
+    const ch = chordNotes(B.chord, 3).map(m => m + tr), tones = [ch[0], ch[1], ch[2], ch[0] + 12];
+    if (B.pad && T.pad && i === 0) { const po = T.pad.oct ?? (T.pad.type === 'violinPad' ? 4 : 3); for (const m of ch) voice(T.pad.type, hz(m + 12 * (po - 3)), t, sd * 16, T.pad.vol, out, 0.15); }
+    const lhTok = B.lh ? B.lh[i] : (B.bass && P.bass && P.bass[i] ? P.bass[i].t : null);
+    if (lhTok && 'R35O'.includes(lhTok)) {
+      let d = 1; const arr = B.lh; if (arr) { while (i + d < 16 && arr[i + d] === '-') d++; } else d = P.bass[i].d;
+      const r = ch[0] - 12, m = lhTok === 'R' ? r : lhTok === '3' ? r + ch[1] - ch[0] : lhTok === '5' ? r + 7 : r + 12;
+      voice(T.bass ? T.bass.wave || 'bass' : 'pianoBass', hz(m), t, sd * d, T.bass ? T.bass.vol : 0.1, out);
+    }
+    if (B.rh && B.rh[i] === 'c') { for (const m of ch) voice('piano', hz(m + 12), t, sd * 1.5, 0.045, out); for (const m of ch) voice('violinStac', hz(m + 24), t, sd, 0.016, out); }
+    if (B.arp && B.arpW) {
+      const A = B.arpW; if (!A._p) A._p = A.pat.split(/\s+/);
+      if (A._c) { const c2 = A._c[i]; if ('R35O'.includes(c2)) { const r = ch[0] + 12 * (A.oct - 3); voice(A.wave, hz(c2 === 'R' ? r : c2 === '3' ? r + ch[1] - ch[0] : c2 === '5' ? r + 7 : r + 12), t, sd * 2, A.vol, out, 0.1); } }
+      else if (!(song && i % 2 === 1)) { const k = A._p[i % A._p.length]; if (k !== '.') voice(A.wave, hz(tones[+k] + 12 * (A.oct - 3)), t, sd * (song ? 2 : 1), A.vol ?? 0.03, out, 0.2); }
+    }
+    if (B.lead && B.lead[i]) { const e = B.lead[i]; voice(B.leadWave, hz(e.m + tr), t, sd * e.d, B.leadVol, out, (T.lead && T.lead.echo) || 0); }
+    for (const x of B.extra) { const e = x.ev && x.ev[i]; if (e) voice(x.w, hz(e.m + tr), t, sd * e.d, x.v, out, 0.15); }
+    const D = B.drums || {}, dv = (T.drums && T.drums.vol) || 0.7;
+    drum.pitch = hz(ch[0] - 24);
+    for (const k of ['k', 's', 'h', 't', 'T']) if (D[k] && D[k][i] === 'x') { if (song && k === 'h') continue; drum(song && k === 'k' ? 'B' : k, t, song && k === 's' ? dv * 0.6 : dv, out); }
+    if (B.fill && i >= 12) drum('s', t, dv * (0.4 + (i - 12) * 0.13), out);
+    if (B.roll) drum('s', t, dv * (0.1 + i / 16 * 0.7), out);
+    if (B.hit && i === 0) {
+      drum('x', t, 0.9, out); if (song) drum('C', t, 0.9, out);
+      if (T.hit === 'orch') { for (const m of ch) voice('violin', hz(m + 12), t, sd * 3, 0.04, out); for (const m of ch) voice('piano', hz(m - 12), t, sd * 4, 0.075, out); }
+      else if (T.hit) for (const m of ch) voice('brass', hz(m), t, sd * 2, 0.05, out);
+    }
+  }
+  function tick() {
+    if (!cur || !AC || cur.file) return;
+    const nowT = AC.currentTime, sd = 60 / cur.T.bpm / 4;
+    if (cur.next < nowT - 0.3) cur.next = nowT + 0.05;
+    while (cur.next < nowT + 0.15) { schedule(cur, cur.step, cur.next); cur.next += sd; cur.step++; }
+  }
+  function fadeAudio(a, from, to, time, done) {
+    const t0 = performance.now();
+    const step = () => { const k = Math.min(1, (performance.now() - t0) / (time * 1000)); try { a.volume = from + (to - from) * k; } catch (e) {} if (k < 1) requestAnimationFrame(step); else if (done) done(); };
+    step();
+  }
+  function playFile(id, F) {
+    const a = new Audio(); a.loop = true; a.volume = 0; a.muted = mute; a.preload = 'auto';
+    const c = { id, tr: 0, audio: a, file: true }; let i = 0;
+    const fail = () => { if (cur !== c) return; i++; if (i < F.src.length) { a.src = F.src[i]; a.play().catch(() => {}); } else { cur = null; startSynth(id, 0); } };
+    a.addEventListener('error', fail);
+    a.addEventListener('playing', () => { if (cur === c && !c.faded) { c.faded = true; fadeAudio(a, 0, F.vol, 0.8); } });
+    a.src = F.src[0]; a.play().catch(() => {});
+    return c;
+  }
+  function startSynth(id, tr) {
+    if (!TRACKS[id]) return;
+    const g = AC.createGain(); g.gain.setValueAtTime(0, AC.currentTime); g.gain.linearRampToValueAtTime(1, AC.currentTime + 0.6); g.connect(master);
+    cur = { id, tr, T: TRACKS[id], P: prep[id], g, step: 0, next: AC.currentTime + 0.1 };
+  }
+  function fadeOut(c, time = 0.8) {
+    if (!c) return;
+    if (c.file) { const a = c.audio; fadeAudio(a, a.volume, 0, time, () => { a.pause(); a.removeAttribute('src'); try { a.load(); } catch (e) {} }); return; }
+    const t = AC.currentTime; c.g.gain.cancelScheduledValues(t); c.g.gain.setValueAtTime(c.g.gain.value, t); c.g.gain.linearRampToValueAtTime(0, t + time); setTimeout(() => { try { c.g.disconnect(); } catch (e) {} }, time * 1000 + 200); }
+  return {
+    play(id, tr = 0) {
+      if (!ensure()) return;
+      if (cur && cur.id === id && cur.tr === tr) return;
+      fadeOut(cur); cur = null;
+      if (!id) return;
+      if (FILE_TRACKS[id]) { cur = playFile(id, FILE_TRACKS[id]); return; }
+      startSynth(id, tr);
+    },
+    stop(time) { if (!AC) return; fadeOut(cur, time); cur = null; },
+    jingle(kind) {
+      if (!ensure()) return;
+      const g = AC.createGain(); g.gain.value = 1; g.connect(master); const t = AC.currentTime + 0.05;
+      const seq = kind === 'win' ? [['C5', 0, 0.12], ['E5', 0.12, 0.12], ['G5', 0.24, 0.12], ['C6', 0.36, 0.5], ['E5', 0.36, 0.5], ['G5', 0.36, 0.5]]
+        : [['G4', 0, 0.3], ['Eb4', 0.3, 0.3], ['C4', 0.6, 0.3], ['B3', 0.9, 0.8]];
+      for (const [n, o, d] of seq) { voice('piano', hz(midi(n)), t + o, d, 0.1, g, 0.2); if (kind === 'win') voice('violin', hz(midi(n)), t + o, d, 0.05, g, 0.2); }
+      setTimeout(() => { try { g.disconnect(); } catch (e) {} }, 3000);
+    },
+    setMute(m) { mute = m; if (cur && cur.file) cur.audio.muted = m; if (master) master.gain.setTargetAtTime(m ? 0 : MUSIC_VOL, AC.currentTime, 0.05); },
+  };
+})();
+const FIELD_KEY = [0, 2, -2, 3, 5, -3, 1, -1];
+
 // ---------- data: stages ----------
 const ZX = [0, 1500, 3000, 4500];
 const BAND = [430, 665];
@@ -168,7 +600,11 @@ const STAGES = [
   { name: '불꽃 화산섬', theme: 'volcano', zones: ['검은 해안', '용암 협곡', '화산 분화구'], mobs: ['imp', 'obsKnight'], shooter: 'fireImp', boss: 'inferno' },
   { name: '별의 끝, 우주', theme: 'space', zones: ['달의 평원', '궤도 정거장', '공허의 옥좌'], mobs: ['alien', 'robot'], shooter: 'alienGunner', boss: 'nebulon' },
   { name: '공허의 끝', theme: 'abyss', zones: ['뒤틀린 궤도', '부서진 별의 잔해', '공허의 끝'], mobs: ['voidCultist', 'voidSentinel'], shooter: 'voidWatcher', boss: 'kairos' },
+  // ===== 2장 · 황혼의 세계 =====
+  { name: '어둠의 숲', theme: 'forest', zones: ['숲의 입구', '뒤틀린 오솔길', '고르그로스의 둥지'], mobs: ['treeSprite', 'treeGuard', 'twistedGuard'], shooter: 'forestWatcher', boss: 'gorgros' },
 ];
+const CH1_COUNT = 8;
+const stageNo = si => si < CH1_COUNT ? String(si + 1) : `2-${si - CH1_COUNT + 1}`;
 
 const base = { rope: '#d8c07a', wood: '#a0703f', woodD: '#6f4a28', metal: '#b9c0cc', ol: OL };
 const MOBS = {
@@ -216,7 +652,7 @@ const MOBS = {
     pal: { ...base, skin: '#3a3440', skinD: '#26222c', tunic: '#4a4252', rope: '#ff8a3a', visor: '#ffa040', plume: '#d8342a', metal: '#ffb06a', wood: '#1f1b24' } },
   fireImp: { name: '화염술사 임프', role: 'shooter', hp: 400, dmg: 74, range: 340, speed: 110, wind: .6, s: 1, w: 14, exp: 45, head: 'imp', weapon: 'staff',
     pal: { ...base, skin: '#e0503a', skinD: '#b83a2a', tunic: '#6a1f1a', horn: '#f0e0c0', proj: '#ff7a2a', wood: '#2a2226' } },
-  inferno: { name: '화염 군주 인페르노', role: 'boss', ai: 'inferno', hp: 9000, dmg: 100, range: 380, speed: 120, wind: .75, s: 2.05, w: 36, exp: 550, head: 'imp', hat: 'flamecrown', weapon: 'scimitar',
+  inferno: { name: '화염 군주 이그니스', role: 'boss', ai: 'inferno', draw: 'ignis', hw: 78, hh: 250, shadow: 72, hp: 9000, dmg: 100, range: 380, speed: 120, wind: .75, s: 1, w: 40, exp: 550, head: 'imp', hat: 'flamecrown', weapon: 'scimitar',
     pal: { ...base, skin: '#c8322a', skinD: '#8f2019', tunic: '#2a1a1a', horn: '#f0e0c0', cape: '#ff7a2a', metal: '#ffb06a', wood: '#1f1618', rope: '#ffb03a', proj: '#ffb03a' } },
   alien: { name: '외계인 병사', role: 'melee', hp: 480, dmg: 70, range: 74, speed: 150, wind: .42, s: 1.02, w: 14, exp: 30, head: 'alien', weapon: 'laser',
     pal: { ...base, skin: '#9ab8a0', skinD: '#7a9880', tunic: '#4a5a8a', rope: '#c0c8d8', metal: '#6affff', wood: '#3a3f55' } },
@@ -224,8 +660,18 @@ const MOBS = {
     pal: { ...base, skin: '#a8b0c0', skinD: '#848ca0', tunic: '#6a7288', rope: '#3a4058', metal: '#6affd0', wood: '#4a5068', visor: '#6ae0ff' } },
   alienGunner: { name: '외계인 사수', role: 'shooter', hp: 420, dmg: 80, range: 360, speed: 115, wind: .56, s: 1.02, w: 14, exp: 50, head: 'alien', weapon: 'blaster',
     pal: { ...base, skin: '#b0a0c8', skinD: '#8f80a8', tunic: '#3a3a5a', rope: '#c0c8d8', metal: '#8a92a8', proj: '#c86aff', wood: '#3a3f55' } },
-  nebulon: { name: '공허 황제 네뷸론', role: 'boss', ai: 'nebulon', hp: 9000, dmg: 280, range: 400, speed: 135, wind: .72, s: 1.95, w: 34, exp: 600, head: 'alien', hat: 'crown', weapon: 'laser',
+  nebulon: { name: '공허 황제 네뷸론', role: 'boss', ai: 'nebulon', draw: 'nebulon', hw: 95, hh: 245, shadow: 95, hp: 9000, dmg: 280, range: 400, speed: 135, wind: .72, s: 1, w: 44, exp: 600, head: 'alien', hat: 'crown', weapon: 'laser',
     pal: { ...base, skin: '#9a8ac8', skinD: '#7a6aa8', tunic: '#2a1f4a', rope: '#f0c040', cape: '#5a2fa0', metal: '#ff6aff', wood: '#2a2440', proj: '#ff6aff' } },
+  treeSprite: { name: '나무 정령', role: 'melee', hp: 540, dmg: 76, range: 64, speed: 150, wind: .42, s: 0.95, w: 14, exp: 45, head: 'sprite', weapon: 'club',
+    pal: { ...base, skin: '#8a6a44', skinD: '#6a4e30', tunic: '#4f8a3e', rope: '#2f5a26', leaf: '#7ad05a', glow: '#d8ff6a', wood: '#7a5a38', woodD: '#4a3420' } },
+  treeGuard: { name: '나무 수호자', role: 'melee', hp: 700, dmg: 90, range: 120, speed: 115, wind: .52, s: 1.15, w: 16, exp: 55, head: 'treant', weapon: 'spear',
+    pal: { ...base, skin: '#7a5a3a', skinD: '#5a4028', tunic: '#3f6e34', rope: '#8a6a44', leaf: '#4f9a3c', glow: '#ffe07a', wood: '#6a4a2c', metal: '#a8c890' } },
+  twistedGuard: { name: '뒤틀린 수호자', role: 'melee', hp: 920, dmg: 104, range: 78, speed: 108, wind: .55, s: 1.28, w: 18, exp: 70, head: 'twisted', weapon: 'axe',
+    pal: { ...base, skin: '#4a3a3a', skinD: '#332628', tunic: '#3a2a44', rope: '#6a3a8a', leaf: '#5a3a6a', glow: '#d07aff', wood: '#3a2a28', metal: '#8a7aa0' } },
+  forestWatcher: { name: '숲의 감시자', role: 'shooter', hp: 500, dmg: 92, range: 360, speed: 112, wind: .56, s: 1.05, w: 15, exp: 60, head: 'watcher', weapon: 'staff',
+    pal: { ...base, skin: '#7a5a3a', skinD: '#5a4028', tunic: '#2f5a3a', rope: '#8a6a44', leaf: '#3f7a3a', glow: '#f4e87a', proj: '#9aff5a', wood: '#5a3e26' } },
+  gorgros: { name: '숲의 주인 고르그로스', role: 'boss', ai: 'gorgros', draw: 'gorgros', hp: 9000, dmg: 200, range: 500, speed: 78, wind: .8, s: 1, w: 90, hw: 135, hh: 235, shadow: 150, exp: 1000,
+    pal: { bark: '#6e4c30', barkD: '#4c321e', ring: '#d2aa74', ringD: '#8e6c44', moss: '#4a8a3a', eye: '#e4ff4a', mouth: '#1a0c08', leaf: '#5aa640', ol: OL } },
   voidCultist: { name: '공허 추종자', role: 'melee', hp: 560, dmg: 82, range: 92, speed: 150, wind: .42, s: 1.05, w: 15, exp: 45, head: 'shade', hat: 'hood', weapon: 'scythe',
     pal: { ...base, skin: '#2a1f3a', skinD: '#1c1428', tunic: '#3a2a55', hat: '#241a38', rope: '#b57bff', eye: '#d8a8ff', metal: '#c8b8e8', wood: '#2a2236' } },
   voidSentinel: { name: '공허 파수병', role: 'melee', hp: 880, dmg: 96, range: 124, speed: 112, wind: .55, s: 1.25, w: 18, exp: 55, head: 'knight', weapon: 'spear',
@@ -248,6 +694,10 @@ const MOBS = {
 for (const k in MOBS) { const w = {}; for (const c in MOBS[k].pal) w[c] = '#ffffff'; w.ol = OL; MOBS[k].white = w; }
 
 const THEMES = {
+  forest: { sky: ['#0b1614', '#2c4a3c'], sun: [1060, 90, '#eef6dc'], clouds: null,
+    far: { t: 'forest' }, near: { t: 'range', f: '#1c3629', o: '#0a1710', par: .2, step: 90, hmin: 50, hmax: 130 },
+    hill: ['#22422f', '#0d2016'], field: '#243f2c', prop: 'darktree',
+    ground: ['#2d4f34', '#12261a', '#27462e'], path: ['#584836', '#221810', '#4c3e2e'], deco: 'forest', fence: 'roots', land: 'stump', fg: ['#1a3620', '#07120a'], part: 'firefly' },
   grass: { sky: ['#6fb8ec', '#cdeefc'], sun: [1060, 100, '#fff6cf'], clouds: ['#ffffff', '#e3f0fb', '#6b8bb3'],
     far: { t: 'range', f: '#a9c3dd', o: '#5d7897', snow: true, par: .08, step: 170, hmin: 90, hmax: 200 },
     near: { t: 'range', f: '#8fb4a8', o: '#4e7468', par: .18, step: 130, hmin: 40, hmax: 110 },
@@ -292,8 +742,13 @@ const MAGE_PAL = { skin: '#f3cfa7', hair: '#efe4cc', robe: '#4b3a8f', robeDark: 
   boot: '#3a2a24', staff: '#8a5a34', gem: '#6ae0ff', gold: '#e0b84a', ol: OL };
 const ARCHER_PAL = { skin: '#f0c9a0', hair: '#6a3f24', hood: '#3f7a4a', hoodDark: '#2f5e3a', tunic: '#8a5a34', tunicDark: '#5e3c22', trim: '#e0b84a',
   pants: '#4a3a2a', boot: '#3a2a1c', glove: '#5a3b28', bow: '#a8723e', bowDark: '#6a4424', string: '#f4ecd8', arrow: '#e8dcc0', gold: '#e0b84a', fletch: '#d8453a', ol: OL };
-function tintPal(col, dark, ol) { const o = {}; for (const k of new Set([...Object.keys(HERO_PAL), ...Object.keys(MAGE_PAL), ...Object.keys(ARCHER_PAL)])) o[k] = col; Object.assign(o, dark); o.ol = ol; return o; }
+const ASSASSIN_PAL = { skin: '#f0cba4', hood: '#2b2e40', suit: '#33374d', suitDark: '#24273a', wrap: '#5a5f7a', mask: '#1d1f2c',
+  scarf: '#d62f45', scarfDark: '#9a1f32', belt: '#3a2a38', gold: '#c9b27a', pants: '#262939', boot: '#17181f', glove: '#2e2433',
+  blade: '#e6ecf4', bladeDark: '#8a9ab6', grip: '#6a1f2e', eye: '#ff5a6a', ol: OL };
+function tintPal(col, dark, ol) { const o = {}; for (const k of new Set([...Object.keys(HERO_PAL), ...Object.keys(MAGE_PAL), ...Object.keys(ARCHER_PAL), ...Object.keys(ASSASSIN_PAL)])) o[k] = col; Object.assign(o, dark); o.ol = ol; return o; }
 const GHOST_PAL = tintPal('#9fe8ff', { coat: '#6fd0f5', coatDark: '#58bde6', robe: '#6fd0f5', robeDark: '#58bde6', hat: '#58bde6', hood: '#6fd0f5', hoodDark: '#58bde6', tunic: '#6fd0f5', tunicDark: '#58bde6', pants: '#5fc6ee', hair: '#4fb0e0' }, '#2b86b8');
+const SHADOW_PAL = tintPal('#4c3d70', { skin: '#5d4d85', hood: '#34285a', suit: '#3c2f63', suitDark: '#2c2250', mask: '#221a3e', wrap: '#5a4a8a',
+  scarf: '#d62f45', scarfDark: '#9a1f32', eye: '#ff6a8a', blade: '#d8ccff', bladeDark: '#8a74d0' }, '#130b26');
 const R_PAL = tintPal('#e2c4ff', { blade: '#f3e6ff', bladeDark: '#a877e8' }, '#6b35c9');
 
 const CLASSES = {
@@ -322,6 +777,16 @@ const CLASSES = {
       R: { name: '천공의 화살비', cd: 26, mp: 55, dur: 2.5, col: ['#f0e08a', '#6a8a2a'] } },
     atks: [{ dur: 0.28, s: 1.57, e: 1.57, mult: 0.95 }, { dur: 0.28, s: 1.57, e: 1.57, mult: 0.95 }, { dur: 0.42, s: 1.57, e: 1.57, mult: 1.6 }] },
 };
+CLASSES.assassin = { name: '암살자', dmgMul: 1.3, hp: 1050, hpL: 105, mp: 340, mpL: 22, reach: 80, pal: ASSASSIN_PAL, lock: 'twilight',
+  desc: '쿠나이·분신·투명화로 치고 빠지는 암살', cut: ['각성', 'AWAKENING'], cutCol: ['#ff4a6a', '#3a0a1a', '#ffb0c0'],
+  skills: {
+    Q: { name: '쿠나이', cd: 3, mp: 12, dur: 0.3, col: ['#ffb0c0', '#8a1a3a'] },
+    W: { name: '분신', cd: 6, mp: 18, dur: 0.35, col: ['#c8a8ff', '#3a2c6a'] },
+    E: { name: '투명화', cd: 8, mp: 16, dur: 0.25, col: ['#e6eeff', '#4a5a8a'] },
+    R: { name: '각성', cd: 28, mp: 50, dur: 0.5, col: ['#ff6a8a', '#4a0a2a'] } },
+  atks: [{ dur: 0.22, s: 3.2, e: 0.9, mult: 0.8 }, { dur: 0.22, s: 0.6, e: 3.0, mult: 0.85 }, { dur: 0.32, s: 3.6, e: 0.5, mult: 1.35 }] };
+// 쿠나이 피해: 가까울수록 강해짐 (던진 거리 0 → x1.7, 최대 사거리 → x0.6)
+const KUNAI = { q: 0.5, w: 0.18, r: 0.2, near: 1.7, far: 0.6, range: 460 };
 const HP_REGEN = 30;
 // 테스트 버전: true면 모든 스테이지가 처음부터 열려 있어요. 정식 버전에서는 false로 바꾸세요.
 const TEST_MODE = false;
@@ -339,6 +804,7 @@ function loadSave() {
   }
   if (!s.mage) s.mage = blankSave();
   if (!s.archer) s.archer = blankSave();
+  if (!s.assassin) s.assassin = blankSave();
   if (!s.cls) s.cls = 'sword';
   return s;
 }
@@ -346,6 +812,7 @@ function writeSave(s) { try { localStorage.setItem(SAVE_KEY, JSON.stringify(s));
 let save = loadSave();
 
 // ---------- state ----------
+let clones = [];
 let G, hero, enemies, effects, numbers, projectiles, eproj, potions, spawnQueue, camX, shake, hitstop, flashT, banners;
 const mouse = { x: 640, y: 540, rDown: false, holdGround: false };
 const ST = () => STAGES[G.si];
@@ -358,14 +825,14 @@ function makeHero(cls, lvl, exp) {
   const maxHp = C.hp + (lvl - 1) * C.hpL, maxMp = C.mp + (lvl - 1) * C.mpL;
   return { cls, x: 220, y: 555, z: 0, vx: 0, face: 1, hp: maxHp, maxHp, mp: maxMp, maxMp, state: 'idle', st: 0, t: 0,
     combo: 0, comboIdle: 0, hitDone: false, hit: null, target: null, dest: null, inv: 0, lvl, exp, skill: null, burn: null, dashCd: 0,
-    cds: { Q: 0, W: 0, E: 0, R: 0 } };
+    cds: { Q: 0, W: 0, E: 0, R: 0 }, stealth: 0, awake: 0 };
 }
 function newGame(si, cls, lvl, exp) {
   G = { state: 'title', si, cls, cz: 0, cleared: false, time: 0, kills: 0, combo: 0, comboT: 0, maxCombo: 0, dmgTaken: 0,
     winT: 0, bossRef: null, cutin: 0, hintT: si === 0 ? 14 : 0, overT: 0, startLvl: lvl, startExp: exp,
     haz: [], event: null, under: false, erupt: 0 };
   hero = makeHero(cls, lvl, exp);
-  enemies = []; effects = []; numbers = []; projectiles = []; eproj = []; potions = []; spawnQueue = []; banners = [];
+  clones = []; enemies = []; effects = []; numbers = []; projectiles = []; eproj = []; potions = []; spawnQueue = []; banners = [];
   camX = 0; shake = 0; hitstop = 0; flashT = 0;
 }
 newGame(0, 'sword', 1, 0);
@@ -379,7 +846,7 @@ function queueZone(zi) {
   const si = G.si, S = ST(), x0 = ZX[zi];
   let r = si * 97 + zi * 13 + 1; const R = () => hash(r++ * 1.713);
   const lane = () => BAND[0] + 20 + R() * (BAND[1] - BAND[0] - 40);
-  const mob = () => R() < 0.6 ? S.mobs[0] : S.mobs[1];
+  const mob = () => { const r2 = R(); return S.mobs.length > 2 ? (r2 < 0.42 ? S.mobs[0] : r2 < 0.78 ? S.mobs[1] : S.mobs[2]) : (r2 < 0.6 ? S.mobs[0] : S.mobs[1]); };
   const add = (kind, x, y, t) => spawnQueue.push({ t, kind, x, y });
   if (zi < 2) {
     const n = 4 + si + zi;
@@ -394,7 +861,7 @@ function queueZone(zi) {
     for (let i = 0; i < n; i++) add(mob(), x0 + 600 + R() * 800, lane(), i * 0.2);
     if (S.shooter && !MOBS[S.boss].ai) add(S.shooter, x0 + 1300 + R() * 150, lane(), 0.4);
   }
-  banners.push({ text: S.zones[zi], sub: `STAGE ${si + 1} · ZONE ${zi + 1} / 3`, t: 0, dur: 2.4 });
+  banners.push({ text: S.zones[zi], sub: `STAGE ${stageNo(si)} · ZONE ${zi + 1} / 3`, t: 0, dur: 2.4 });
 }
 function spawnEnemy(kind, x, y) {
   const T = MOBS[kind], si = G.si, boss = T.role === 'boss';
@@ -407,7 +874,8 @@ function spawnEnemy(kind, x, y) {
   e.hp = e.maxHp;
   if (boss) {
     e.state = 'intro'; e.st = 1.6; G.bossRef = e; e.face = -1;
-    banners.push({ text: T.name, sub: `STAGE ${si + 1} BOSS`, t: 0, dur: 2.2, boss: true });
+    if (TRACKS[kind] || FILE_TRACKS[kind]) MUSIC.play(kind);
+    banners.push({ text: T.name, sub: `STAGE ${stageNo(si)} BOSS`, t: 0, dur: 2.2, boss: true });
     shake = 10; sfx('boom');
   }
   enemies.push(e);
@@ -529,7 +997,7 @@ function teleEll(x, y, rx, ry, k, col) {
   ctx.beginPath(); ctx.ellipse(x - camX, y, rx * clamp(k, 0, 1), ry * clamp(k, 0, 1), 0, 0, PI * 2); ctx.fillStyle = col + '55'; ctx.fill();
 }
 const inEll = (o, x, y, rx, ry) => { const dx = (o.x - x) / rx, dy = (o.y - y) / ry; return dx * dx + dy * dy <= 1; };
-function skillInvuln() { return hero.state === 'dash' || (hero.skill && (hero.skill.id === 'W' || hero.skill.id === 'R')); }
+function skillInvuln() { return hero.stealth > 0 || hero.state === 'dash' || (hero.skill && (hero.skill.id === 'W' || hero.skill.id === 'R')); }
 function canHitHero() { return G.state === 'play' && hero.hp > 0 && hero.inv <= 0 && !skillInvuln(); }
 function applyBurn(dmg, ticks) {
   if (G.state !== 'play' || hero.hp <= 0 || skillInvuln()) return;
@@ -637,7 +1105,7 @@ function gainExp(v) {
   }
 }
 function expNeed() { return 80 + hero.lvl * 60; }
-function heroDie() { hero.hp = 0; hero.state = 'dead'; hero.st = 0; hero.skill = null; G.state = 'dying'; G.overT = 1.6; hero.burn = null; }
+function heroDie() { hero.hp = 0; hero.state = 'dead'; hero.st = 0; hero.skill = null; G.state = 'dying'; G.overT = 1.6; hero.burn = null; MUSIC.stop(0.6); MUSIC.jingle('lose'); }
 function hurtHero(d, fromX, o = {}) {
   if (hero.inv > 0 || G.state !== 'play' || hero.hp <= 0) return;
   if (skillInvuln()) return;
@@ -681,8 +1149,9 @@ function castSkill(id) {
   const S = SK(id);
   if (!['idle', 'run', 'attack'].includes(hero.state)) return;
   if (hero.cds[id] > 0) return;
-  if (hero.mp < S.mp) { addNum(hero.x, hero.y - 120, 'MP 부족', '#8fc8ff', 22); return; }
-  hero.mp -= S.mp; hero.cds[id] = S.cd;
+  const awakeQ = hero.cls === 'assassin' && id === 'Q' && hero.awake > 0, cost = awakeQ ? 0 : S.mp;
+  if (hero.mp < cost) { addNum(hero.x, hero.y - 120, 'MP 부족', '#8fc8ff', 22); return; }
+  hero.mp -= cost; hero.cds[id] = awakeQ ? 0.5 : S.cd;
   const mdx = mouse.x + camX - hero.x; if (Math.abs(mdx) > 8) hero.face = mdx > 0 ? 1 : -1;
   hero.state = 'skill'; hero.skill = { id, t: 0, done: false, hit: new Set(), tick: 0, ghostT: 0, x0: hero.x, y0: hero.y, n: 0 }; hero.st = 0;
   sfx('skill');
@@ -690,13 +1159,13 @@ function castSkill(id) {
 }
 function inAttackRange(e) {
   const dx = e.x - hero.x, reach = CL().reach;
-  if (hero.cls !== 'sword') return Math.abs(dx) <= reach + e.w && Math.abs(e.y - hero.y) <= 22;
+  if (hero.cls !== 'sword' && hero.cls !== 'assassin') return Math.abs(dx) <= reach + e.w && Math.abs(e.y - hero.y) <= 22;
   return Math.abs(dx) <= reach + e.w && Math.abs(dx) >= 10 && Math.abs(e.y - hero.y) <= 22;
 }
 function moveHeroToward(tx, ty, dt) {
   const dx = tx - hero.x, dy = ty - hero.y, d = Math.hypot(dx, dy * 1.3);
   if (d < 5) return true;
-  const sp = 300;
+  const sp = 300 * (hero.stealth > 0 ? 1.75 : 1);
   const vx = dx / d * sp, vy = dy / d * sp * 0.72;
   hero.x += Math.abs(vx * dt) > Math.abs(dx) ? dx : vx * dt;
   hero.y += Math.abs(vy * dt) > Math.abs(dy) ? dy : vy * dt;
@@ -709,6 +1178,8 @@ function heroTimers(dt) {
   h.inv = Math.max(0, h.inv - dt);
   for (const k in h.cds) h.cds[k] = Math.max(0, h.cds[k] - dt);
   h.dashCd = Math.max(0, h.dashCd - dt);
+  if (h.stealth > 0) { h.stealth = Math.max(0, h.stealth - dt); if (h.stealth === 0) smokeFx(h.x, h.y, 0.6); }
+  if (h.awake > 0) h.awake = Math.max(0, h.awake - dt);
   if (h.hp > 0) { h.mp = Math.min(h.maxMp, h.mp + 7 * dt); h.hp = Math.min(h.maxHp, h.hp + HP_REGEN * dt); }
   if (h.burn && h.burn.left > 0 && h.hp > 0 && G.state === 'play') {
     h.burn.t -= dt;
@@ -729,7 +1200,14 @@ function updateHero(dt) {
     if (h.st <= 0) h.state = 'idle';
   } else if (h.state === 'attack') {
     const A = CL().atks[h.combo]; h.st += dt; const p = h.st / A.dur;
-    if (h.cls === 'sword') {
+    if (h.cls === 'assassin') {
+      if (p > 0.05 && p < 0.3) h.x += h.face * (h.combo === 2 ? 200 : 110) * dt;
+      if (!h.hitDone && p >= 0.32) {
+        h.hitDone = true; slashFx(h, A.s, A.e, h.combo === 2 ? '#ff5a7a' : '#c8a8ff', h.combo === 2 ? 80 : 70, h.combo === 2 ? 26 : 20, 70, h.combo === 2 ? '#ffe0e6' : '#f2eaff');
+        const opts = h.combo === 2 ? { kx: 200, stun: 0.45, col: '#ffb0c0' } : { kx: 50, stun: 0.3, col: '#e0d0ff' };
+        heroHits(h.hit, -12, 100, 32, e => hitEnemy(e, atk() * A.mult, opts));
+      }
+    } else if (h.cls === 'sword') {
       if (p > 0.08 && p < 0.35) h.x += h.face * (h.combo === 2 ? 170 : 90) * dt;
       if (!h.hitDone && p >= 0.35) {
         h.hitDone = true; slashFx(h, A.s, A.e, h.combo === 2 ? '#ffd35c' : '#9fdcff', h.combo === 2 ? 100 : 90, h.combo === 2 ? 36 : 28);
@@ -755,7 +1233,7 @@ function updateHero(dt) {
     if (h.st < 0.2) { h.x += h.face * 1150 * dt; h.dashGhost -= dt; if (h.dashGhost <= 0) { h.dashGhost = 0.035; ghostFx(GHOST_PAL, 0.28); } }
     if (h.st >= 0.26) h.state = 'idle';
   } else if (h.state === 'skill') {
-    if (h.cls === 'sword') updateSwordSkill(h, dt); else if (h.cls === 'mage') updateMageSkill(h, dt); else updateArcherSkill(h, dt);
+    if (h.cls === 'sword') updateSwordSkill(h, dt); else if (h.cls === 'mage') updateMageSkill(h, dt); else if (h.cls === 'assassin') updateAssassinSkill(h, dt); else updateArcherSkill(h, dt);
   } else {
     h.comboIdle += dt; if (h.comboIdle > 0.45) h.combo = 0;
     if (mouse.rDown && mouse.holdGround && G.state === 'play') h.dest = clampToField(mouse.x + camX, mouse.y);
@@ -785,6 +1263,7 @@ function clampHero() {
   hero.y = clamp(hero.y, BAND[0], BAND[1]);
   if (G.under) hero.x = clamp(hero.x, camX + 60, camX + W - 60);
   else hero.x = clamp(hero.x, zoneMinX(), zoneMaxX(hero.y));
+  if (G.wall) { const k = G.wall.k; hero.x = clamp(hero.x, lerp(camX + 20, G.wall.x1 + 26, k), lerp(camX + W - 20, G.wall.x2 - 26, k)); }
 }
 function updateSwordSkill(h, dt) {
   const k = h.skill, S = SK(k.id); k.t += dt; const t = k.t;
@@ -930,6 +1409,89 @@ function updateArcherSkill(h, dt) {
     if (t >= 0.2 && t < 0.45) { k.up = (k.up || 0) - dt; if (k.up <= 0) { k.up = 0.05; const ux = h.x + h.face * 12; fx(0.4, 'front', kk => { const sx = ux - camX + kk * 20 * h.face, y = h.y - 90 - kk * 400; limb([sx, y + 30, sx, y], 3, '#fff3b0'); }); } }
     if (t >= 0.5 && t < 2.0) { k.tick -= dt; if (k.tick <= 0) { k.tick = 0.045; heroRainArrow(k.x0 + h.face * rnd(60, 560), clamp(k.y0 + rnd(-100, 100), BAND[0], BAND[1]), 0.3, false); } }
     if (!k.done && t >= 1.75) { k.done = true; heroRainArrow(k.x0 + h.face * 290, k.y0, 0.6, true); }
+  }
+  if (t >= S.dur) { h.state = 'idle'; h.skill = null; h.z = 0; h.combo = 0; }
+}
+// ---------- assassin ----------
+function smokeFx(x, y, s = 1) {
+  for (let i = 0; i < 8; i++) {
+    const a = i / 8 * PI * 2, ox = Math.cos(a) * 24 * s, oy = Math.sin(a) * 10 * s, r0 = rnd(12, 17) * s;
+    fx(0.55, 'front', k => {
+      ctx.globalAlpha = 0.8 * (1 - k);
+      circ(x - camX + ox * (1 + k * 0.8), y - 34 * s + oy - k * 34 * s, r0 + k * 14 * s);
+      ctx.fillStyle = i % 2 ? '#8a80a8' : '#cfc8e0'; ctx.fill(); ctx.globalAlpha = 1;
+    });
+  }
+}
+function throwKunai(x, y, face, base) {
+  sfx('shot');
+  for (const a of [-0.34, -0.17, 0, 0.17, 0.34])
+    projectiles.push({ kind: 'kunai', x: x + face * 24, y, face, ang: a, vy: Math.sin(a) * 1100 * 0.45, dist: 0, max: KUNAI.range, t: 0, base, hit: new Set() });
+}
+function nearestEnemy(x, y, r) {
+  let best = null, bd = r;
+  for (const e of enemies) { if (!targetable(e)) continue; const d = Math.hypot(e.x - x, (e.y - y) * 1.5); if (d < bd) { bd = d; best = e; } }
+  return best;
+}
+function spawnClone(x, y, o) {
+  clones.push({ x, y: clamp(y, BAND[0], BAND[1]), face: hero.face, t: 0, throwT: 0, next: o.first, left: o.throws, ...o });
+  smokeFx(x, y, 0.7);
+}
+function updateClones(dt) {
+  for (const c of clones) {
+    c.t += dt; c.throwT = Math.max(0, c.throwT - dt);
+    if (c.follow) {
+      const tx = hero.x + c.ox * hero.face, ty = clamp(hero.y + c.oy, BAND[0], BAND[1]);
+      c.x += (tx - c.x) * Math.min(1, dt * 5); c.y += (ty - c.y) * Math.min(1, dt * 5);
+    }
+    const tg = nearestEnemy(c.x, c.y, 560);
+    c.face = tg ? (tg.x >= c.x ? 1 : -1) : hero.face;
+    if (tg && c.follow) c.y += clamp(tg.y - c.y, -60, 60) * Math.min(1, dt * 3);
+    if (c.left > 0 && c.t >= c.next) {
+      if (tg || !c.follow) {
+        throwKunai(c.x, c.y, c.face, c.base); c.throwT = 0.28; c.left--; c.next = c.t + c.interval;
+        if (c.left === 0) c.life = Math.min(c.life, c.t + 0.4);
+      } else c.next = c.t + 0.1;
+    }
+    if (c.t >= c.life) { c.dead = true; smokeFx(c.x, c.y, 0.7); }
+  }
+  clones = clones.filter(c => !c.dead);
+}
+function clonePose(c) {
+  const ps = { bob: Math.sin((c.t + c.x * 0.01) * 3) * 1.3, crouch: 4, lean: 0.05, flap: Math.sin(c.t * 3) * 3, tail: Math.sin(c.t * 8),
+    legF: [0.4, 0.1], legB: [-0.4, -0.35], armF: [0.55, 1.4], armB: [-0.25, 0.3], sword: 2.35, spin: 1 };
+  if (c.throwT > 0) {
+    const p = 1 - c.throwT / 0.28, sw = lerp(3.8, 1.2, easeOut(clamp(p / 0.5, 0, 1)));
+    ps.sword = sw; ps.armF = [0.3 + sw * 0.45, sw - 0.25]; ps.lean = 0.15; ps.crouch = 6;
+  }
+  return ps;
+}
+function drawClone(c) {
+  const fadeIn = clamp(c.t / 0.2, 0, 1), fadeOut = clamp((c.life - c.t) / 0.25, 0, 1), a = Math.min(fadeIn, fadeOut);
+  const sx = c.x - camX, t = now();
+  ctx.globalAlpha = 0.45 * a;
+  for (let i = 0; i < 3; i++) { circ(sx + Math.sin(t * 3 + i * 2) * 14, c.y - 4 - ((t * 30 + i * 9) % 18), 9 - i); ctx.fillStyle = '#5a4a8a'; ctx.fill(); }
+  ctx.save(); ctx.globalAlpha = 0.82 * a; ctx.translate(sx, c.y); ctx.scale(c.face, 1);
+  drawPose('assassin', clonePose(c), SHADOW_PAL);
+  ctx.restore(); ctx.globalAlpha = 1; curOL = OL;
+}
+function updateAssassinSkill(h, dt) {
+  const k = h.skill, S = SK(k.id); k.t += dt; const t = k.t;
+  if (k.id === 'Q') {
+    if (!k.done && t >= 0.1) { k.done = true; throwKunai(h.x, h.y, h.face, KUNAI.q); }
+  } else if (k.id === 'W') {
+    if (!k.done && t >= 0.14) {
+      k.done = true; sfx('magic');
+      for (const sgn of [-1, 1]) spawnClone(h.x - h.face * 36, h.y + sgn * 56, { throws: 5, interval: 0.4, first: 0.25, base: KUNAI.w, life: 4, follow: false });
+    }
+  } else if (k.id === 'E') {
+    if (!k.done && t >= 0.06) { k.done = true; h.stealth = 3; smokeFx(h.x, h.y, 1); sfx('zap'); }
+  } else if (k.id === 'R') {
+    if (!k.done && t >= 0.25) {
+      k.done = true; h.awake = 7; h.cds.Q = 0; shake = Math.max(shake, 8); smokeFx(h.x, h.y, 1.3); sfx('boom');
+      for (const [ox, oy] of [[-70, -60], [-95, 55], [30, -85]])
+        spawnClone(h.x + ox * h.face, h.y + oy, { throws: 99, interval: 0.8, first: 0.35, base: KUNAI.r, life: 7, follow: true, ox, oy });
+    }
   }
   if (t >= S.dur) { h.state = 'idle'; h.skill = null; h.z = 0; h.combo = 0; }
 }
@@ -1096,6 +1658,118 @@ function stoneHaz(x, y, delay, dmg, kind) {
       }
     } });
 }
+BD.gorRoot = 900; BD.gorGhost = 380; BD.gorWrath = 1150;
+function drawBigRoot(sx, y, rx, rise) {
+  curOL = '#140c06';
+  ctx.beginPath(); ctx.ellipse(sx, y + 2, rx * 0.95, 18, 0, 0, PI * 2); ctx.fillStyle = 'rgba(40,24,12,.6)'; ctx.fill();
+  for (const [ox, hs, lean] of [[-0.78, 0.5, -0.4], [0.74, 0.55, 0.38], [-0.42, 0.78, -0.2], [0.4, 0.82, 0.22], [0, 1, 0.04]]) {
+    const bx = sx + ox * rx, hgt = 200 * hs * rise, w = 28 * hs + 8;
+    if (hgt < 3) continue;
+    const tx = bx + lean * hgt * 0.6, ty = y - hgt;
+    ctx.beginPath(); ctx.moveTo(bx - w, y + 4); ctx.quadraticCurveTo(bx - w * 0.6 + lean * hgt * 0.2, y - hgt * 0.5, tx, ty);
+    ctx.quadraticCurveTo(bx + w * 0.7 + lean * hgt * 0.35, y - hgt * 0.45, bx + w, y + 4); ctx.closePath(); ctx.lineJoin = 'round'; P('#6a4a2c', 3);
+    ctx.beginPath(); ctx.moveTo(bx - w * 0.15, y); ctx.quadraticCurveTo(bx + lean * hgt * 0.2, y - hgt * 0.5, tx - 2, ty + 14); ctx.strokeStyle = '#4a3220'; ctx.lineWidth = 3; ctx.stroke();
+    for (let k = 1; k <= 2; k++) { const px = lerp(bx, tx, k / 3.2) + w * 0.4, py = lerp(y, ty, k / 3.2); poly([px, py, px + 13, py - 7, px + 1, py - 10]); P('#8a6a44', 2); }
+    circ(tx - lean * 6, ty + 20, 4); ctx.fillStyle = '#4f9a3c'; ctx.fill();
+  }
+  curOL = OL;
+}
+function rootHaz(x, y, delay, dmg, rx = 240, ry = 84) {
+  haz({ dur: delay + 1.1, y,
+    back(h) {
+      if (h.t < delay) teleEll(x, y, rx, ry, h.t / delay, '#ff4a4a');
+      if (h.t > delay * 0.5) { ctx.beginPath(); ctx.ellipse(x - camX, y, rx * 0.7 * clamp((h.t - delay * 0.5) / (delay * 0.5), 0, 1), 12, 0, 0, PI * 2); ctx.fillStyle = 'rgba(40,24,12,.35)'; ctx.fill(); }
+    },
+    ent(h) { if (h.t < delay) return; const k = h.t - delay; drawBigRoot(x - camX, y, rx, clamp(k / 0.12, 0, 1) * clamp((1.1 - k) / 0.3, 0, 1)); },
+    update(dt, h) {
+      if (!h.hit && h.t >= delay) {
+        h.hit = true; shake = Math.max(shake, 14); sfx('boom');
+        for (let i = 0; i < 5; i++) dustFx(x + (i - 2) * rx * 0.4, y + rnd(-20, 20), 2, 1.3);
+        if (inEll(hero, x, y, rx, ry) && hero.z < 80 && canHitHero()) hurtHero(dmg, x - 1, { exact: true, kb: 520 });
+      }
+    } });
+}
+function drawTreeGhost(sx, y, t, dur, ph) {
+  const a = Math.max(0, Math.min(1, t / 0.5, (dur - t) / 0.5)), fy = y - 72 + Math.sin(t * 4 + ph) * 6;
+  ctx.globalAlpha = 0.3 * a; ctx.beginPath(); ctx.ellipse(sx, y, 22, 7, 0, 0, PI * 2); ctx.fillStyle = '#6aff9a'; ctx.fill();
+  ctx.globalAlpha = 0.85 * a; curOL = '#0a2a14';
+  ctx.beginPath(); ctx.moveTo(sx - 20, fy); ctx.quadraticCurveTo(sx - 26, fy + 30, sx - 8 + Math.sin(t * 6 + ph) * 6, fy + 54);
+  ctx.quadraticCurveTo(sx + 2, fy + 36, sx + 10 + Math.sin(t * 6 + ph + 1) * 6, fy + 50); ctx.quadraticCurveTo(sx + 26, fy + 26, sx + 20, fy); ctx.closePath(); P('rgba(140,255,170,.55)', 2.5);
+  limb([sx + 4, fy - 20, sx + 11, fy - 34], 2.5, '#5a4028'); limb([sx - 5, fy - 20, sx - 12, fy - 30], 2.5, '#5a4028');
+  circ(sx, fy - 4, 19); P('#8a6a44', 3);
+  ctx.beginPath(); ctx.moveTo(sx - 12, fy - 17); ctx.quadraticCurveTo(sx - 16, fy - 4, sx - 10, fy + 9); ctx.strokeStyle = '#5a4028'; ctx.lineWidth = 2; ctx.stroke();
+  for (const ox of [-7, 7]) { poly([sx + ox - 5, fy - 10, sx + ox + 5, fy - 12 + (ox > 0 ? 0 : 2), sx + ox + 3, fy - 5, sx + ox - 4, fy - 5]); ctx.fillStyle = OL; ctx.fill(); circ(sx + ox, fy - 8, 1.8); ctx.fillStyle = '#8aff6a'; ctx.fill(); }
+  ctx.beginPath(); ctx.ellipse(sx, fy + 5, 5, 6, 0, 0, PI * 2); ctx.fillStyle = OL; ctx.fill();
+  ctx.globalAlpha = 1; curOL = OL;
+}
+function ghostHaz(x, y, i, dmg) {
+  haz({ dur: 5, y, gx: x, cd: 0, ph: i * 1.3,
+    update(dt, h) {
+      const tx = hero.x + Math.cos(h.t * 1.4 + h.ph) * 50, ty = hero.y + Math.sin(h.t * 1.4 + h.ph) * 20;
+      const dx = tx - h.gx, dy = ty - h.y, d = Math.hypot(dx, dy) || 1, sp = h.t < 0.6 ? 0 : 170 + i * 12;
+      h.gx += dx / d * Math.min(sp * dt, d); h.y += dy / d * Math.min(sp * 0.7 * dt, d);
+      h.cd -= dt;
+      if (h.t > 0.6 && h.t < h.dur - 0.3 && h.cd <= 0 && Math.abs(hero.x - h.gx) < 34 && Math.abs(hero.y - h.y) < 26 && hero.z < 60 && canHitHero()) { h.cd = 1; hurtHero(dmg, h.gx, { exact: true, kb: 260 }); }
+    },
+    ent(h) { drawTreeGhost(h.gx - camX, h.y, h.t, h.dur, h.ph); } });
+}
+function branchSweep(e, a, pat) {
+  const x1 = a.x1, x2 = a.x2, cx = a.cx, y0 = BAND[0] - 10, y1 = BAND[1] + 10, ym = (BAND[0] + BAND[1]) / 2, TELE = 0.75;
+  const ring = { x: cx, y: BAND[0] + 20, rx: 330, ry: 170 }, safe = { x: cx + rnd(-180, 180), y: 590, rx: 150, ry: 58 };
+  const inside = (hx, hy) => pat === 'top' ? hy < ym : pat === 'bottom' ? hy >= ym : pat === 'left' ? hx < cx : pat === 'right' ? hx >= cx
+    : pat === 'ring' ? inEll({ x: hx, y: hy }, ring.x, ring.y, ring.rx, ring.ry) : !inEll({ x: hx, y: hy }, safe.x, safe.y, safe.rx, safe.ry);
+  const region = () => {
+    ctx.beginPath();
+    if (pat === 'top') ctx.rect(x1 - camX, y0, x2 - x1, ym - y0);
+    else if (pat === 'bottom') ctx.rect(x1 - camX, ym, x2 - x1, y1 - ym);
+    else if (pat === 'left') ctx.rect(x1 - camX, y0, cx - x1, y1 - y0);
+    else if (pat === 'right') ctx.rect(cx - camX, y0, x2 - cx, y1 - y0);
+    else if (pat === 'ring') ctx.ellipse(ring.x - camX, ring.y, ring.rx, ring.ry, 0, 0, PI * 2);
+    else { ctx.rect(x1 - camX, y0, x2 - x1, y1 - y0); ctx.ellipse(safe.x - camX, safe.y, safe.rx, safe.ry, 0, 0, PI * 2); }
+  };
+  haz({ dur: TELE + 0.4,
+    back(h) {
+      if (h.t >= TELE) return;
+      const k = h.t / TELE;
+      region(); ctx.fillStyle = `rgba(255,60,60,${0.12 + k * 0.22})`; ctx.fill('evenodd'); ctx.lineWidth = 3; ctx.strokeStyle = '#ff4a4a'; ctx.stroke();
+      if (pat === 'outer') { ctx.beginPath(); ctx.ellipse(safe.x - camX, safe.y, safe.rx, safe.ry, 0, 0, PI * 2); ctx.fillStyle = 'rgba(120,255,160,.35)'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#ffffff'; ctx.stroke(); outlinedText('안전', safe.x - camX, safe.y - safe.ry - 14, 18, '#fff', OL, 5); }
+    },
+    update(dt, h) {
+      if (h.hit || h.t < TELE) return;
+      h.hit = true; shake = Math.max(shake, 16); sfx('boom'); sfx('swing');
+      const vert = pat === 'left' || pat === 'right';
+      fx(0.4, 'front', k => {
+        ctx.save(); region(); ctx.clip('evenodd'); ctx.globalAlpha = 1 - k;
+        for (let i = 0; i < 7; i++) {
+          if (vert) { const x = lerp(pat === 'left' ? x1 : cx, pat === 'left' ? cx : x2, (i + 0.5) / 7) - camX; limb([x - 30 + k * 60, y0, x + 30 - k * 60, y1], 10, i % 2 ? '#6a4a2c' : '#4f9a3c'); }
+          else { const y = lerp(y0, y1, (i + 0.5) / 7), xa = x1 - camX, xb = x2 - camX; limb([xa + (xb - xa) * k * 0.3, y - 10, xb - (xb - xa) * (1 - k) * 0.3, y + 10], 10, i % 2 ? '#6a4a2c' : '#4f9a3c'); }
+        }
+        ctx.restore(); ctx.globalAlpha = 1;
+      });
+      if (inside(hero.x, hero.y) && hero.z < 90 && canHitHero()) hurtHero(BD.gorWrath, cx, { exact: true, kb: 460 });
+    } });
+}
+function rootWallHaz(dur) {
+  haz({ dur,
+    update(dt, h) { const b = G.bossRef; if (!b || b.state === 'dead') { G.wall = null; h.t = h.dur; } },
+    front(h) {
+      if (!G.wall) return;
+      const k = Math.min(G.wall.k, clamp((h.dur - h.t) / 0.5, 0, 1)), tm = now();
+      for (const side of [-1, 1]) {
+        const edge = side < 0 ? lerp(camX - 60, G.wall.x1, k) : lerp(camX + W + 60, G.wall.x2, k), far = side < 0 ? camX - 80 : camX + W + 80;
+        const a = Math.min(edge, far) - camX, b = Math.max(edge, far) - camX;
+        ctx.fillStyle = '#1a120c'; ctx.fillRect(a, 360, b - a, H - 360);
+        curOL = '#07120a';
+        for (let i = 0; i < 9; i++) {
+          const yy = 390 + i * 40, sw = Math.sin(tm * 1.5 + i) * 6, ex = edge - camX + side * (-8 + sw);
+          ctx.beginPath(); ctx.moveTo(far - camX, yy - 30); ctx.quadraticCurveTo(ex + side * 30, yy - 10, ex, yy + 6); ctx.quadraticCurveTo(ex + side * 26, yy + 26, far - camX, yy + 30);
+          ctx.closePath(); P(i % 2 ? '#5a4028' : '#4a3422', 3);
+          poly([ex, yy + 6, ex - side * 22, yy - 2, ex, yy - 6]); P('#8a6a44', 2);
+        }
+        curOL = OL;
+      }
+    } });
+}
 const BOSSAI = {
   kraken: {
     ult: 'tsunami',
@@ -1191,7 +1865,7 @@ const BOSSAI = {
         }
         e.face = a.face; e.state = a.t < 0.6 ? 'windup' : 'chase';
         if (a.t >= 0.6 && a.t < 1.9) {
-          const mx = e.x + a.face * 34, my = e.y - 116;
+          const mx = e.x + a.face * 22, my = e.y - 208;
           a.pt = (a.pt || 0) - dt;
           if (a.pt <= 0) {
             a.pt = 0.025; if (Math.random() < 0.3) sfx('swing');
@@ -1431,6 +2105,50 @@ function kaiBlinkFx(x, y) {
     ctx.globalAlpha = 1;
   });
 }
+BOSSAI.gorgros = {
+  ult: 'wrath',
+  move(e, dt) { const side = e.x < hero.x ? -1 : 1; moveTo(e, hero.x + side * 250, hero.y, e.speed, dt); },
+  choose(e) {
+    if (e.cds.ghost === undefined) e.cds.ghost = 5;
+    if (e.cds.ghost <= 0 && Math.random() < 0.55) { e.cds.ghost = e.p2 ? 9 : 12; return 'ghosts'; }
+    if (Math.abs(hero.x - e.x) < 640) return 'root';
+    return null;
+  },
+  phase2(e) { e.cdMul *= 0.85; },
+  acts: {
+    root(e, a) {
+      if (!a.init) { a.init = true; a.face = e.face; rootHaz(e.x + a.face * 290, clamp(e.y, BAND[0] + 30, BAND[1] - 30), 0.95, BD.gorRoot); }
+      e.face = a.face; e.pose = a.t < 0.95 ? 'raise' : 'slam';
+      if (!a.hit && a.t >= 0.95) { a.hit = true; dustFx(e.x + a.face * 70, e.y, 4, 1.4); }
+      if (a.t >= 1.7) { a.done = true; e.pose = null; e.atkCd = rnd(1.0, 1.6) * e.cdMul; }
+    },
+    ghosts(e, a) {
+      if (!a.init) { a.init = true; bossBanner('나무 유령', e); e.pose = 'call'; }
+      if (!a.sp && a.t >= 0.6) {
+        a.sp = true; boomFx(e.x, e.y, 130, '#6aff9a', 0.5);
+        for (let i = 0; i < 5; i++) { const ang = i / 5 * PI * 2; ghostHaz(e.x + Math.cos(ang) * 150, clamp(e.y + Math.sin(ang) * 70, BAND[0], BAND[1]), i, BD.gorGhost); }
+      }
+      if (a.t >= 1.2) { a.done = true; e.pose = null; e.atkCd = 0.6; }
+    },
+    wrath(e, a) {
+      const SW = 7, GAP = 1.15, T0 = 1.3;
+      if (!a.init) {
+        a.init = true; bossBanner('나무의 분노', e); shake = 12; sfx('boom');
+        a.cx = camX + W / 2; a.x1 = a.cx - 400; a.x2 = a.cx + 400; a.ex0 = e.x; a.ey0 = e.y;
+        G.wall = { x1: a.x1, x2: a.x2, k: 0 };
+        const pats = ['top', 'bottom', 'left', 'right', 'ring', 'outer']; a.seq = []; let lastP = '';
+        for (let i = 0; i < SW; i++) { let q; do q = pats[Math.floor(Math.random() * pats.length)]; while (q === lastP); lastP = q; a.seq.push(q); }
+        rootWallHaz(T0 + SW * GAP + 0.6);
+      }
+      if (a.t < T0) { const k = easeOut(clamp(a.t / T0, 0, 1)); e.x = lerp(a.ex0, a.cx, k); e.y = lerp(a.ey0, BAND[0] + 16, k); if (G.wall) G.wall.k = k; }
+      e.face = hero.x > e.x ? 1 : -1;
+      const idx = Math.floor((a.t - T0) / GAP);
+      if (a.t >= T0 && idx < SW && !a['s' + idx]) { a['s' + idx] = true; branchSweep(e, a, a.seq[idx]); e.swingT = 0; }
+      e.pose = a.t < T0 ? 'raise' : 'swing';
+      if (a.t >= T0 + SW * GAP + 0.6) { a.done = true; G.wall = null; e.pose = null; e.atkCd = 1.2; }
+    },
+  },
+};
 BOSSAI.kairos = {
   ult: 'collapse',
   move(e, dt) { const side = e.x < hero.x ? -1 : 1; moveTo(e, hero.x + side * 300, hero.y, e.speed * 0.7, dt); },
@@ -1622,6 +2340,7 @@ function update(dt) {
     separate();
     enemies = enemies.filter(e => !e.remove);
     updateProjectiles(dt);
+    updateClones(dt);
   }
   for (const h of G.haz) {
     if (h.dead) continue;
@@ -1636,7 +2355,7 @@ function update(dt) {
   if (G.state === 'play' && !G.event) {
     if (!G.cleared && spawnQueue.length === 0 && enemies.every(e => e.state === 'dead')) {
       G.cleared = true;
-      if (G.cz === 2) { G.state = 'win'; G.winT = 2.6; banners.push({ text: 'STAGE CLEAR', sub: ST().name, t: 0, dur: 2.6, boss: true }); }
+      if (G.cz === 2) { G.state = 'win'; G.winT = 2.6; MUSIC.stop(0.4); MUSIC.jingle('win'); banners.push({ text: 'STAGE CLEAR', sub: ST().name, t: 0, dur: 2.6, boss: true }); }
       else banners.push({ text: '구역 돌파', sub: '오른쪽으로 이동하세요', t: 0, dur: 1.8 });
     }
     if (G.cleared && G.cz < 2 && hero.x > ZX[G.cz + 1] + 90) { G.cz++; G.cleared = false; queueZone(G.cz); }
@@ -1663,10 +2382,17 @@ function updateProjectiles(dt) {
       }
       if (Math.random() < 0.5) dustFx(p.x - p.face * 20, p.y, 1, 0.7);
     } else {
-      const sp = (p.kind === 'bolt' ? 950 : p.kind === 'arrow' ? 1300 : p.kind === 'bomb' ? 1000 : 720) * dt; p.x += p.face * sp; p.dist += sp;
+      const sp = (p.kind === 'bolt' ? 950 : p.kind === 'arrow' ? 1300 : p.kind === 'bomb' ? 1000 : p.kind === 'kunai' ? 1100 : 720) * dt;
+      if (p.kind === 'kunai') { p.x += p.face * sp * Math.cos(p.ang); p.y += p.vy * dt; if (p.y < BAND[0] - 30 || p.y > BAND[1] + 30) p.dead = true; }
+      else p.x += p.face * sp;
+      p.dist += sp;
       for (const e of enemies) {
         if (!targetable(e) || p.hit.has(e)) continue;
         if (Math.abs(e.x - p.x) < 22 + e.w && Math.abs(e.y - p.y) < 30) {
+          if (p.kind === 'kunai') {
+            p.hit.add(e); const m = lerp(KUNAI.near, KUNAI.far, clamp(p.dist / p.max, 0, 1)); sparkFx(p.x, p.y - 56, 0.5, '#ffd0da');
+            hitEnemy(e, atk() * p.base * m, { kx: 40, stun: 0.22, stop: 0.015, fromX: p.x - p.face * 30, col: m > 1.3 ? '#ff8aa0' : '#ffd0da' }); continue;
+          }
           if (p.pierce) { p.hit.add(e); hitEnemy(e, p.dmg, { launch: p.launch, kx: 160, fromX: p.x - p.face * 30, col: '#fff3b0' }); continue; }
           p.dead = true; p.hitE = e; projHit(p); break;
         }
@@ -1693,6 +2419,10 @@ function projHit(p) {
   } else if (p.kind === 'arrow') {
     sparkFx(p.x, p.y - 58, 0.7, '#fff3b0');
     if (p.hitE) hitEnemy(p.hitE, p.dmg, { kx: 70, stun: 0.3, launch: p.launch, fromX: p.x - p.face * 30, col: '#fff3b0' });
+  } else if (p.kind === 'kunai') {
+    sparkFx(p.x, p.y - 56, 0.55, '#ffd0da');
+    const m = lerp(KUNAI.near, KUNAI.far, clamp(p.dist / p.max, 0, 1));
+    if (p.hitE) hitEnemy(p.hitE, atk() * p.base * m, { kx: 40, stun: 0.22, stop: 0.015, fromX: p.x - p.face * 30, col: m > 1.3 ? '#ff8aa0' : '#ffd0da' });
   } else if (p.kind === 'bomb') {
     bombHaz(p.hitE ? p.hitE.x : p.x, p.hitE ? p.hitE.y : p.y);
   } else if (p.kind === 'fire') {
@@ -1764,6 +2494,13 @@ function heroPose(h) {
   }
   if (s === 'skill' && h.skill) {
     const k = h.skill, t2 = k.t, p = t2 / SK(k.id).dur;
+    if (h.cls === 'assassin') {
+      if (k.id === 'Q') { ps.sword = swing(3.8, 1.2, p, 0, 0.45); ps.armF = armFor(ps.sword); ps.lean = 0.15; ps.legF = [0.55, 0.12]; ps.legB = [-0.5, -0.4]; ps.crouch = 6; ps.flap = -5; }
+      else if (k.id === 'W') { ps.armF = [1.1, 2.3]; ps.armB = [1.2, 2.5]; ps.sword = 2.9; ps.crouch = 5; ps.flap = Math.sin(t2 * 20) * 3; }
+      else if (k.id === 'E') { ps.crouch = 13; ps.lean = 0.3; ps.armF = [-0.5, -0.9]; ps.sword = -1.8; ps.legF = [0.8, 0.3]; ps.legB = [-0.7, -0.5]; ps.flap = -8; }
+      else { ps.armF = [2.3, 2.9]; ps.armB = [-2.0, -2.6]; ps.sword = 3.3; ps.crouch = 7; ps.legF = [0.6, 0.2]; ps.legB = [-0.6, -0.3]; ps.flap = Math.sin(t2 * 16) * 6; }
+      return ps;
+    }
     if (mage) {
       if (k.id === 'Q') { ps.sword = swing(3.4, 1.6, p, 0.1, 0.4); ps.armF = armFor(ps.sword); ps.lean = 0.12; ps.legF = [0.5, 0.1]; ps.legB = [-0.45, -0.4]; ps.crouch = 5; ps.flap = -5; }
       else if (k.id === 'W') { ps.lean = 0.3; ps.sword = 2.4; ps.armF = [0.2, 0.9]; ps.flap = -10; ps.crouch = 6; }
@@ -1810,7 +2547,69 @@ function legPts(hx, hy, th, sh) {
   const kx = hx + Math.sin(th) * 20, ky = hy + Math.cos(th) * 20;
   return [hx, hy, kx, ky, kx + Math.sin(sh) * 20, ky + Math.cos(sh) * 20];
 }
-function drawPose(cls, ps, pal) { if (cls === 'mage') drawMagePose(ps, pal); else if (cls === 'archer') drawArcherPose(ps, pal); else drawHeroPose(ps, pal); }
+function drawPose(cls, ps, pal) { if (cls === 'mage') drawMagePose(ps, pal); else if (cls === 'archer') drawArcherPose(ps, pal); else if (cls === 'assassin') drawAssassinPose(ps, pal); else drawHeroPose(ps, pal); }
+function drawDagger(hx, hy, a, len, pal) {
+  const dx = Math.sin(a), dy = Math.cos(a), nx = -dy, ny = dx;
+  limb([hx - dx * 8, hy - dy * 8, hx + dx * 3, hy + dy * 3], 4, pal.grip);
+  circ(hx - dx * 11, hy - dy * 11, 3); P(pal.gold, 2);
+  const gx = hx + dx * 5, gy = hy + dy * 5;
+  poly([gx + nx * 4, gy + ny * 4, gx + dx * (len - 9) + nx * 3, gy + dy * (len - 9) + ny * 3, gx + dx * len, gy + dy * len, gx - nx * 3, gy - ny * 3]);
+  P(pal.blade, 2.5);
+  ctx.beginPath(); ctx.moveTo(gx + dx * 3 + nx, gy + dy * 3 + ny); ctx.lineTo(gx + dx * (len - 10) + nx, gy + dy * (len - 10) + ny);
+  ctx.strokeStyle = pal.bladeDark; ctx.lineWidth = 1.4; ctx.stroke();
+  limb([gx + nx * 6, gy + ny * 6, gx - nx * 6, gy - ny * 6], 3, pal.gold);
+}
+function drawAssassinPose(ps, pal) {
+  curOL = pal.ol;
+  const cr = ps.crouch, b = ps.bob, hipY = -44 + cr + b, shY = -80 + cr + b, f = ps.flap;
+  if (ps.spin !== 1) { const sc = Math.sign(ps.spin || 1) * Math.max(0.3, Math.abs(ps.spin)); ctx.scale(sc, 1); }
+  const leanAt = () => { ctx.save(); ctx.translate(0, hipY); ctx.rotate(ps.lean); ctx.translate(0, -hipY); };
+  let lp = legPts(-3, hipY, ps.legB[0], ps.legB[1]);
+  limb(lp, 9, pal.pants); ctx.beginPath(); ctx.roundRect(lp[4] - 6, lp[5] - 5, 16, 9, [4, 7, 3, 3]); P(pal.boot);
+  leanAt();
+  const hx = 2, hy = shY - 15, tw = ps.tail * 6;
+  for (let i = 1; i >= 0; i--) {
+    ctx.beginPath(); ctx.moveTo(-3, shY + 1 + i * 3);
+    ctx.bezierCurveTo(-20, shY - 3 + tw * 0.4 + i * 5, -34 + f * 0.3, shY + 6 + tw + i * 6, -54 + i * 12 + f * 0.9, shY + tw * 1.4 + i * 12);
+    ctx.lineCap = 'round'; ctx.strokeStyle = curOL; ctx.lineWidth = 12 - i * 2; ctx.stroke();
+    ctx.strokeStyle = i ? pal.scarfDark : pal.scarf; ctx.lineWidth = 6 - i; ctx.stroke();
+  }
+  { const sx = -5, sy = shY + 4, ex = sx + Math.sin(ps.armB[0]) * 13, ey = sy + Math.cos(ps.armB[0]) * 13,
+      wx = ex + Math.sin(ps.armB[1]) * 12, wy = ey + Math.cos(ps.armB[1]) * 12;
+    drawDagger(wx, wy, ps.armB[1] - 0.6, 24, pal);
+    limb([sx, sy, ex, ey, wx, wy], 8, pal.suitDark); circ(wx, wy, 4.5); P(pal.glove, 2.5); }
+  ctx.beginPath(); ctx.moveTo(-10, hipY - 4); ctx.lineTo(4, hipY - 4); ctx.lineTo(-2 + f * 0.6, hipY + 18); ctx.lineTo(-14 + f, hipY + 15); ctx.closePath(); P(pal.suitDark);
+  ctx.restore();
+  lp = legPts(3, hipY, ps.legF[0], ps.legF[1]);
+  limb(lp, 10, pal.pants);
+  { const mx = (lp[0] + lp[2]) / 2, my = (lp[1] + lp[3]) / 2; ctx.beginPath(); ctx.roundRect(mx - 3, my - 5, 7, 10, 2); P(pal.belt, 2); limb([mx + 1, my - 5, mx + 1, my - 11], 2, '#dfe5ee'); }
+  ctx.beginPath(); ctx.roundRect(lp[4] - 6, lp[5] - 5, 17, 9, [4, 7, 3, 3]); P(pal.boot);
+  leanAt();
+  ctx.beginPath(); ctx.moveTo(-10, shY - 2); ctx.lineTo(11, shY - 2); ctx.lineTo(10, hipY); ctx.lineTo(-9, hipY); ctx.closePath(); ctx.lineJoin = 'round'; P(pal.suit);
+  ctx.beginPath(); ctx.moveTo(-8, shY + 1); ctx.lineTo(10, hipY - 8); ctx.strokeStyle = pal.wrap; ctx.lineWidth = 4; ctx.stroke();
+  ctx.beginPath(); ctx.roundRect(-10, hipY - 7, 21, 6, 2); P(pal.belt, 2.5);
+  ctx.beginPath(); ctx.roundRect(3, hipY - 8, 5, 8, 1.5); P(pal.gold, 2);
+  ctx.beginPath(); ctx.moveTo(4, hipY - 1); ctx.lineTo(10, hipY - 1); ctx.lineTo(9 + f * 0.2, hipY + 12); ctx.lineTo(4 + f * 0.3, hipY + 9); ctx.closePath(); P(pal.suit, 2.5);
+  ctx.save(); ctx.translate(hx, hy);
+  ctx.beginPath(); ctx.roundRect(-4, 8, 8, 8, 2); P(pal.mask, 2.5);
+  circ(1, 1, 11.5); P(pal.skin);
+  ctx.beginPath(); ctx.moveTo(12, -5); ctx.quadraticCurveTo(10, -15, 0, -16); ctx.quadraticCurveTo(-14, -15, -14, 0);
+  ctx.quadraticCurveTo(-14, 10, -6, 14); ctx.lineTo(-2, 6); ctx.quadraticCurveTo(-4, -2, 2, -4); ctx.quadraticCurveTo(7, -6, 12, -5); ctx.closePath(); P(pal.hood);
+  ctx.beginPath(); ctx.moveTo(-3, 2); ctx.lineTo(13, 1.5); ctx.quadraticCurveTo(13.5, 9, 8, 12); ctx.quadraticCurveTo(2, 14.5, -4, 11.5); ctx.closePath(); P(pal.mask, 2.5);
+  limb([-12, -7, 12, -6], 3.5, pal.scarf);
+  limb([-12, -7, -19, -3 + tw * 0.3], 2.5, pal.scarf); limb([-12, -6, -17, 2 + tw * 0.3], 2.5, pal.scarfDark);
+  ctx.beginPath(); ctx.moveTo(4.5, -2.2); ctx.lineTo(10.5, -3.2); ctx.lineTo(9.5, 0.6); ctx.lineTo(5.5, 0.6); ctx.closePath(); ctx.fillStyle = curOL; ctx.fill();
+  circ(8.4, -1.2, 1.1); ctx.fillStyle = pal.eye; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(4, -4.6); ctx.lineTo(11.5, -6.4); ctx.strokeStyle = curOL; ctx.lineWidth = 2; ctx.stroke();
+  ctx.restore();
+  { const sx = 3, sy = shY + 4, ex = sx + Math.sin(ps.armF[0]) * 13, ey = sy + Math.cos(ps.armF[0]) * 13,
+      wx = ex + Math.sin(ps.armF[1]) * 12, wy = ey + Math.cos(ps.armF[1]) * 12;
+    drawDagger(wx, wy, ps.sword, 34, pal);
+    limb([sx, sy, ex, ey, wx, wy], 9, pal.suit); circ(wx, wy, 5); P(pal.glove, 2.5); }
+  ctx.beginPath(); ctx.roundRect(-3, shY - 4, 15, 11, [6, 6, 3, 3]); P(pal.wrap, 2.5);
+  ctx.restore();
+  curOL = OL;
+}
 function drawBow(hx, hy, a, pal, pull) {
   const dx = Math.sin(a), dy = Math.cos(a), nx = -dy, ny = dx;
   const t1 = [hx + nx * 32 - dx * 8, hy + ny * 32 - dy * 8], t2 = [hx - nx * 32 - dx * 8, hy - ny * 32 - dy * 8];
@@ -1987,9 +2786,21 @@ function drawHero() {
     ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = i * PI * 2 / 6; ctx.lineTo(Math.cos(a) * 54, Math.sin(a) * 54); ctx.lineTo(Math.cos(a + PI / 3 * 2) * 54, Math.sin(a + PI / 3 * 2) * 54); } ctx.stroke();
     ctx.restore(); ctx.globalAlpha = 1;
   }
+  if (h.cls === 'assassin' && h.awake > 0) {
+    const t = now(), sx = h.x - camX, fade = Math.min(1, h.awake / 0.4);
+    ctx.globalAlpha = 0.35 * fade; ctx.beginPath(); ctx.ellipse(sx, h.y, 46, 14, 0, 0, PI * 2); ctx.fillStyle = '#ff3a5a'; ctx.fill();
+    for (let i = 0; i < 6; i++) {
+      const x = sx + Math.sin(t * 5 + i * 1.7) * 18 + (i - 2.5) * 7, y = h.y - h.z - 20 - ((t * 70 + i * 17) % 70);
+      ctx.globalAlpha = 0.55 * fade * (1 - ((t * 70 + i * 17) % 70) / 70);
+      ctx.beginPath(); ctx.moveTo(x - 6, y + 10); ctx.quadraticCurveTo(x - 7, y - 3, x, y - 16); ctx.quadraticCurveTo(x + 7, y - 3, x + 6, y + 10); ctx.closePath();
+      ctx.fillStyle = i % 2 ? '#ff3a5a' : '#b04aff'; ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
   ctx.save(); ctx.translate(h.x - camX, h.y - h.z); ctx.scale(h.face, 1);
   if (h.state === 'dead') ctx.globalAlpha = Math.max(0.3, 1 - h.st * 0.3);
   if (h.inv > 0 && Math.floor(h.inv * 20) % 2 === 0) ctx.globalAlpha = 0.45;
+  if (h.stealth > 0) ctx.globalAlpha = 0.28 + 0.08 * Math.sin(now() * 14);
   drawPose(h.cls, ps, CL().pal);
   ctx.restore(); ctx.globalAlpha = 1;
   if (h.burn && h.burn.left > 0) {
@@ -2095,6 +2906,37 @@ function drawWeapon(kind, hx, hy, a, pal) {
 function drawHead(type, pal, hx, hy, fl) {
   const W_ = fl ? '#ffffff' : null;
   switch (type) {
+    case 'sprite':
+      circ(hx, hy, 14); P(pal.skin);
+      ctx.beginPath(); ctx.moveTo(hx - 8, hy - 9); ctx.quadraticCurveTo(hx - 11, hy, hx - 7, hy + 9); ctx.strokeStyle = pal.skinD; ctx.lineWidth = 2; ctx.stroke();
+      limb([hx - 2, hy - 13, hx - 1, hy - 22], 2.5, pal.tunic);
+      ctx.beginPath(); ctx.ellipse(hx - 8, hy - 23, 7, 4, -0.5, 0, PI * 2); P(W_ || pal.leaf, 2);
+      ctx.beginPath(); ctx.ellipse(hx + 5, hy - 25, 7, 4, 0.5, 0, PI * 2); P(W_ || pal.leaf, 2);
+      ctx.beginPath(); ctx.ellipse(hx + 6, hy - 2, 3.4, 4.6, 0, 0, PI * 2); ctx.fillStyle = OL; ctx.fill();
+      circ(hx + 6.5, hy - 2.6, 1.9); ctx.fillStyle = W_ || pal.glow; ctx.fill();
+      ctx.beginPath(); ctx.ellipse(hx + 8, hy + 7, 3, 2.2, 0, 0, PI * 2); ctx.fillStyle = OL; ctx.fill();
+      break;
+    case 'treant':
+      for (const [ox, oy, r] of [[-12, -14, 9], [0, -20, 11], [11, -14, 8]]) { circ(hx + ox, hy + oy, r); P(W_ || pal.leaf, 2.5); }
+      ctx.beginPath(); ctx.roundRect(hx - 12, hy - 13, 25, 30, 7); P(pal.skin);
+      ctx.strokeStyle = pal.skinD; ctx.lineWidth = 2; for (const lx of [-6, 0]) { ctx.beginPath(); ctx.moveTo(hx + lx, hy - 10); ctx.quadraticCurveTo(hx + lx - 3, hy + 2, hx + lx + 1, hy + 14); ctx.stroke(); }
+      ctx.beginPath(); ctx.roundRect(hx + 3, hy - 4, 8, 3.5, 1.5); ctx.fillStyle = OL; ctx.fill(); circ(hx + 8, hy - 2.3, 1.3); ctx.fillStyle = W_ || pal.glow; ctx.fill();
+      ctx.beginPath(); ctx.moveTo(hx + 2, hy + 8); ctx.lineTo(hx + 5, hy + 6); ctx.lineTo(hx + 8, hy + 9); ctx.lineTo(hx + 12, hy + 7); ctx.strokeStyle = OL; ctx.lineWidth = 2; ctx.stroke();
+      break;
+    case 'twisted':
+      limb([hx - 6, hy - 12, hx - 12, hy - 24, hx - 21, hy - 29], 3, pal.skinD); limb([hx + 5, hy - 12, hx + 10, hy - 26, hx + 19, hy - 31], 3, pal.skinD);
+      poly([hx - 12, hy + 12, hx - 14, hy - 6, hx - 6, hy - 15, hx + 10, hy - 13, hx + 16, hy - 2, hx + 12, hy + 13]); ctx.lineJoin = 'round'; P(pal.skin);
+      ctx.beginPath(); ctx.moveTo(hx - 8, hy - 10); ctx.lineTo(hx - 4, hy - 2); ctx.lineTo(hx - 9, hy + 6); ctx.strokeStyle = W_ || pal.glow; ctx.lineWidth = 2; ctx.stroke();
+      poly([hx + 2, hy - 4, hx + 14, hy - 7, hx + 11, hy - 1]); ctx.fillStyle = OL; ctx.fill(); circ(hx + 9.5, hy - 3.6, 1.6); ctx.fillStyle = W_ || pal.glow; ctx.fill();
+      poly([hx + 1, hy + 5, hx + 4, hy + 9, hx + 6, hy + 5, hx + 9, hy + 10, hx + 11, hy + 5, hx + 14, hy + 8, hx + 13, hy + 3]); ctx.fillStyle = OL; ctx.fill();
+      break;
+    case 'watcher':
+      ctx.beginPath(); ctx.arc(hx - 1, hy - 1, 18, PI * 0.85, PI * 2.1); ctx.closePath(); P(W_ || pal.leaf);
+      circ(hx, hy, 13.5); P(pal.skin);
+      ctx.beginPath(); ctx.ellipse(hx + 5, hy - 1, 7, 8.5, 0, 0, PI * 2); P(W_ || pal.glow, 2.5);
+      ctx.beginPath(); ctx.ellipse(hx + 6.5, hy - 1, 1.8, 6, 0, 0, PI * 2); ctx.fillStyle = OL; ctx.fill();
+      for (const [ox, oy, a] of [[-14, -12, -0.8], [-18, 0, -1.6], [-12, 12, -2.4]]) { ctx.beginPath(); ctx.ellipse(hx + ox, hy + oy, 7, 3.5, a, 0, PI * 2); P(W_ || pal.leaf, 2); }
+      break;
     case 'goblin':
       poly([hx - 6, hy - 4, hx - 26, hy - 13, hx - 9, hy + 5]); P(pal.skin);
       circ(hx, hy, 14); P(pal.skin);
@@ -2280,6 +3122,9 @@ function drawMob(e) {
   if (T.draw === 'kraken') return drawKraken(e);
   if (T.draw === 'golem') return drawGolem(e);
   if (T.draw === 'kairos') return drawKairos(e);
+  if (T.draw === 'gorgros') return drawGorgros(e);
+  if (T.draw === 'ignis') return drawIgnis(e);
+  if (T.draw === 'nebulon') return drawNebulon(e);
   const fl = e.flash > 0, pal = fl ? T.white : T.pal, ps = mobPose(e);
   curOL = OL;
   ctx.save(); ctx.translate(e.x - camX, e.y - e.z); ctx.scale(e.face * e.s, e.s);
@@ -2429,6 +3274,252 @@ function drawGolem(e) {
   ctx.restore();
   ctx.restore(); curOL = OL; ctx.globalAlpha = 1;
 }
+function drawGorgros(e) {
+  const fl = e.flash > 0, pal = fl ? e.T.white : e.T.pal, t = e.t;
+  const rise = e.state === 'intro' ? clamp(1 - e.st / 1.6, 0, 1) : 1;
+  ctx.save(); ctx.translate(e.x - camX, e.y - e.z); ctx.scale(e.face, 1);
+  if (e.state === 'dead') ctx.globalAlpha = clamp(1 - (e.st - 0.8) / 0.6, 0, 1);
+  if (rise < 1) { ctx.beginPath(); ctx.rect(-320, -520, 640, 524); ctx.clip(); ctx.translate(0, (1 - rise) * 300); }
+  curOL = '#140c06';
+  const pose = e.pose || (e.state === 'dead' ? 'slam' : null), walk = t * 6;
+  let tilt = pose === 'raise' ? -0.15 : pose === 'slam' ? 0.07 : pose === 'swing' ? Math.sin(t * 5.4) * 0.05 : 0;
+  const sway = pose === 'swing' ? Math.sin(t * 5.4) * 0.55 : pose === 'call' ? 0.25 : Math.sin(t * 1.5) * 0.06;
+  const bob = e.moving ? Math.abs(Math.sin(walk)) * 4 : Math.sin(t * 1.8) * 2;
+  const moss = fl ? '#fff' : pal.moss, leafC = fl ? '#fff' : pal.leaf;
+  const leaves = (x, y, n, r0) => { for (let i = 0; i < n; i++) { const a = r0 + i * 2.1; ctx.beginPath(); ctx.ellipse(x + Math.cos(a) * 7, y + Math.sin(a) * 5, 8, 4.2, a, 0, PI * 2); P(leafC, 2); } };
+  const leg = (x, ph, back) => {
+    const sw = e.moving ? Math.sin(walk + ph * PI) * 16 : 0, lift = e.moving ? Math.max(0, Math.cos(walk + ph * PI)) * 10 : 0, out = x > 0 ? 1 : -1;
+    const col = back ? pal.barkD : pal.bark, kx = x + out * 22 + sw * 0.4, ky = -54 - lift * 0.5, fx = x + out * 12 + sw, fy = -6 - lift;
+    limb([x, -106, kx, ky, fx, fy], back ? 24 : 28, col);
+    for (const d of [-1, -0.35, 0.35, 1]) limb([fx, fy - 4, fx + d * 20, fy + 5 - Math.abs(d) * 2], 7, col);
+    if (!back) { ctx.beginPath(); ctx.ellipse(kx, ky - 8, 13, 8, 0.4, 0, PI * 2); P(moss, 2); leaves(kx - 4, ky - 16, 2, 0.5); }
+  };
+  const antler = (x, y, col, ang) => {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+    limb([0, 0, 5, -40, -6, -72], 10, col); limb([4, -38, 28, -56], 6, col); limb([-6, -72, -20, -86], 4, col); limb([-6, -72, 4, -94], 4, col);
+    leaves(28, -58, 3, 0.3); leaves(-20, -88, 3, 1.2); leaves(4, -96, 3, 2.2); leaves(14, -30, 2, 0.8);
+    ctx.restore();
+  };
+  leg(-80, 0.5, true); leg(90, 1.5, true);
+  ctx.save(); ctx.translate(-100, -106 - bob); ctx.rotate(tilt); ctx.translate(100, 106);
+  limb([-150, -122, -192, -100, -218, -108], 12, pal.barkD); limb([-192, -100, -202, -78], 7, pal.barkD); leaves(-220, -112, 2, 0);
+  antler(-70, -206, pal.barkD, -0.35 - sway * 0.6);
+  ctx.beginPath(); ctx.ellipse(-150, -150, 32, 62, 0, 0, PI * 2); P(pal.barkD, 3.5);
+  ctx.beginPath(); ctx.moveTo(-150, -212); ctx.lineTo(96, -218); ctx.lineTo(96, -82); ctx.lineTo(-150, -88); ctx.closePath(); ctx.fillStyle = pal.bark; ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(-150, -112, 246, 28);
+  ctx.beginPath(); ctx.moveTo(-150, -212); ctx.lineTo(96, -218); ctx.moveTo(-150, -88); ctx.lineTo(96, -82); ctx.lineWidth = 3.5; ctx.strokeStyle = curOL; ctx.stroke();
+  ctx.strokeStyle = pal.barkD; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  for (const [x0, y, l] of [[-130, -190, 90], [-40, -176, 110], [-120, -140, 70], [-20, -126, 80], [-100, -104, 100], [10, -196, 60]]) { ctx.beginPath(); ctx.moveTo(x0, y); ctx.quadraticCurveTo(x0 + l / 2, y + 5, x0 + l, y - 2); ctx.stroke(); }
+  ctx.beginPath(); ctx.moveTo(-140, -206);
+  for (let i = 0; i <= 12; i++) { const x = -140 + i * 18; ctx.lineTo(x + 5, -222 - (i % 2) * 6); ctx.lineTo(x + 12, -210 + (i % 3) * 6 + (i % 2 ? 10 : 0)); }
+  ctx.lineTo(80, -200); ctx.quadraticCurveTo(-30, -190, -140, -206); ctx.closePath(); P(moss, 2.5);
+  for (const x of [-100, -20, 50]) leaves(x, -222, 3, x * 0.1);
+  for (const [x0, x1] of [[-10, 30], [20, 60]]) {
+    ctx.beginPath(); ctx.moveTo(x0, -214); ctx.bezierCurveTo(x0 + 30, -170, x1 - 30, -130, x1, -84);
+    ctx.lineCap = 'round'; ctx.strokeStyle = curOL; ctx.lineWidth = 9; ctx.stroke(); ctx.strokeStyle = fl ? '#fff' : '#4f9a3c'; ctx.lineWidth = 4.5; ctx.stroke();
+  }
+  leaves(8, -170, 2, 1); leaves(46, -128, 2, 2);
+  antler(40, -212, pal.bark, 0.25 + sway);
+  ctx.beginPath(); ctx.ellipse(98, -150, 48, 70, 0, 0, PI * 2); P(pal.ring, 3.5);
+  ctx.beginPath();
+  for (let i = 0; i < 28; i++) { const a = i / 28 * PI * 2, r = i % 2 ? 0.74 : 0.9; ctx.lineTo(98 + Math.cos(a) * 48 * r, -150 + Math.sin(a) * 70 * r); }
+  ctx.closePath(); P(pal.ringD, 2);
+  ctx.beginPath(); ctx.ellipse(98, -150, 32, 50, 0, 0, PI * 2); ctx.fillStyle = fl ? '#fff' : '#5e3e24'; ctx.fill();
+  const mo = pose === 'call' || pose === 'raise' || pose === 'swing' ? 1 : 0.75 + 0.1 * Math.sin(t * 2), my = -128, mh = 32 * mo, mw = 28;
+  ctx.beginPath(); ctx.ellipse(100, my, mw + 6, mh + 6, 0, 0, PI * 2); P(fl ? '#fff' : '#dcbb88', 2.5);
+  const fangs = [[-2.55, 0.26], [-2.05, 0.4], [-1.55, 0.24], [-1.05, 0.36], [-0.55, 0.18], [0.65, 0.2], [1.15, 0.38], [1.62, 0.26], [2.1, 0.42], [2.62, 0.22]];
+  ctx.beginPath();
+  for (let a = -PI; a < PI; a += 0.04) {
+    let d = 0; for (const [fa, fl2] of fangs) d = Math.max(d, fl2 * Math.max(0, 1 - Math.abs(a - fa) / 0.2));
+    ctx.lineTo(100 + Math.cos(a) * mw * (1 - d), my + Math.sin(a) * mh * (1 - d));
+  }
+  ctx.closePath();
+  const g = ctx.createRadialGradient(100, my + 8, 2, 100, my, 30); g.addColorStop(0, fl ? '#fff' : '#a8ff66'); g.addColorStop(0.45, fl ? '#fff' : '#2f7a1e'); g.addColorStop(1, fl ? '#fff' : '#081404');
+  ctx.fillStyle = g; ctx.fill(); ctx.lineJoin = 'miter'; ctx.lineWidth = 2.5; ctx.strokeStyle = curOL; ctx.stroke(); ctx.lineJoin = 'round';
+  for (let i = 0; i < 4; i++) { const k = (t * 0.8 + i / 4) % 1; circ(100 + Math.sin(t * 3 + i * 2) * 8, my + 12 - k * 22, 2); ctx.fillStyle = `rgba(200,255,140,${1 - k})`; ctx.fill(); }
+  const ge = pose === 'call' || pose === 'swing' ? 1 : 0.6 + 0.4 * Math.sin(t * 3);
+  for (const [ex, ey, r] of [[80, -176, 6], [116, -172, 5.4]]) {
+    ctx.beginPath(); ctx.ellipse(ex, ey, r + 4, r + 3, 0, 0, PI * 2); ctx.fillStyle = fl ? '#fff' : '#2a1a0c'; ctx.fill();
+    circ(ex, ey, r + 6); ctx.fillStyle = `rgba(184,255,106,${0.16 * ge})`; ctx.fill();
+    circ(ex, ey, r); P(fl ? '#fff' : '#caff7a', 2); circ(ex, ey, r * 0.45); ctx.fillStyle = '#f4ffe0'; ctx.fill();
+  }
+  ctx.restore();
+  leg(-120, 1, false); leg(50, 0, false);
+  ctx.restore(); curOL = OL; ctx.globalAlpha = 1;
+}
+function drawIgnis(e) {
+  const fl = e.flash > 0, t = e.t, st = e.state;
+  const C = fl ? { obs: '#fff', obs2: '#fff', lava: '#fff', cloak: '#fff', cloakD: '#fff', robe: '#fff', f1: '#fff', f2: '#fff', f3: '#fff', eye: '#fff', gem: '#fff' }
+    : { obs: '#2e2224', obs2: '#4a383a', lava: '#ff8a26', cloak: '#8e1f1f', cloakD: '#6a1414', robe: '#241012', f1: '#ff5a1e', f2: '#ff9a2a', f3: '#ffd84a', eye: '#ffb030', gem: '#ff9a2a' };
+  ctx.save(); ctx.translate(e.x - camX, e.y - e.z); ctx.scale(e.face, 1);
+  let ga = e.alpha ?? 1; if (st === 'dead') ga *= clamp(1 - (e.st - 0.6) / 0.7, 0, 1); ctx.globalAlpha = ga;
+  const fk = (i, a) => Math.sin(t * 7 + i * 1.7) * a, sw = Math.sin(t * 1.6) * 4;
+  const raise = st === 'windup' || st === 'vwind', slam = st === 'attack';
+  curOL = '#1a0808'; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  const flame = (x, y, sc, seed) => {
+    const lay = [[C.f1, 1], [C.f2, 0.68], [C.f3, 0.38]];
+    lay.forEach(([col, k], li) => {
+      const h = 46 * sc * k, w = 18 * sc * k;
+      ctx.beginPath(); ctx.moveTo(x - w, y);
+      ctx.quadraticCurveTo(x - w * 1.2, y - h * 0.5, x - w * 0.4 + fk(seed + li, 4 * sc), y - h * 0.7);
+      ctx.lineTo(x - w * 0.55 + fk(seed + 3, 3), y - h * 0.45);
+      ctx.quadraticCurveTo(x - w * 0.1, y - h * 0.9, x + fk(seed + li + 1, 5 * sc), y - h);
+      ctx.quadraticCurveTo(x + w * 0.4, y - h * 0.7, x + w * 0.5 + fk(seed + 5, 3), y - h * 0.62);
+      ctx.lineTo(x + w * 0.35, y - h * 0.4);
+      ctx.quadraticCurveTo(x + w * 1.2, y - h * 0.45, x + w, y);
+      ctx.quadraticCurveTo(x, y + w * 0.5, x - w, y); ctx.closePath();
+      if (li === 0) P(col, 2); else { ctx.fillStyle = col; ctx.fill(); }
+    });
+  };
+  const hemFlames = (x0, x1, y, n, seed, hmax) => {
+    for (let i = 0; i < n; i++) {
+      const x = lerp(x0, x1, (i + 0.5) / n), h = hmax * (0.55 + 0.45 * hash(i * 3.1 + seed)) + fk(i + seed, 5), w = (x1 - x0) / n * 0.55;
+      ctx.beginPath(); ctx.moveTo(x - w, y + 2); ctx.quadraticCurveTo(x - w * 0.6, y - h * 0.6, x + fk(i + seed + 2, 4), y - h); ctx.quadraticCurveTo(x + w * 0.4, y - h * 0.5, x + w, y + 2); ctx.closePath();
+      ctx.fillStyle = i % 2 ? C.f1 : C.f2; ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x - w * 0.4, y + 2); ctx.quadraticCurveTo(x - w * 0.2, y - h * 0.4, x + fk(i + seed + 4, 2), y - h * 0.6); ctx.quadraticCurveTo(x + w * 0.2, y - h * 0.3, x + w * 0.4, y + 2); ctx.closePath();
+      ctx.fillStyle = C.f3; ctx.fill();
+    }
+  };
+  const claw = (hx, hy, ha, big) => {
+    const dx = Math.cos(ha), dy = Math.sin(ha), px = -dy, py = dx, s2 = big ? 1.25 : 1;
+    poly([hx - dx * 8 * s2 + px * 11 * s2, hy - dy * 8 * s2 + py * 11 * s2, hx + dx * 12 * s2 + px * 12 * s2, hy + dy * 12 * s2 + py * 12 * s2, hx + dx * 15 * s2 - px * 10 * s2, hy + dy * 15 * s2 - py * 10 * s2, hx - dx * 8 * s2 - px * 11 * s2, hy - dy * 8 * s2 - py * 11 * s2]); P(C.obs, 2.5);
+    ctx.beginPath(); ctx.moveTo(hx - dx * 4 * s2 + px * 6, hy - dy * 4 * s2 + py * 6); ctx.lineTo(hx + dx * 3, hy + dy * 3); ctx.lineTo(hx + dx * 10 * s2 - px * 4, hy + dy * 10 * s2 - py * 4); ctx.strokeStyle = C.lava; ctx.lineWidth = 2; ctx.stroke();
+    for (let k = -1.5; k <= 1.5; k += 1) {
+      const bx = hx + dx * 13 * s2 + px * k * 6 * s2, by = hy + dy * 13 * s2 + py * k * 6 * s2, a2 = ha + k * 0.24, len = (26 - Math.abs(k) * 4) * s2;
+      const ex = bx + Math.cos(a2 - 0.5) * len, ey = by + Math.sin(a2 - 0.5) * len, cx = bx + Math.cos(a2) * len * 0.62, cy = by + Math.sin(a2) * len * 0.62;
+      ctx.beginPath(); ctx.moveTo(bx + px * 3.6, by + py * 3.6); ctx.quadraticCurveTo(cx + px * 2.5, cy + py * 2.5, ex, ey); ctx.quadraticCurveTo(cx - px * 2, cy - py * 2, bx - px * 3.6, by - py * 3.6); ctx.closePath(); P(C.obs, 2);
+    }
+  };
+  // ---- back cloak ----
+  ctx.beginPath(); ctx.moveTo(-26, -186);
+  ctx.bezierCurveTo(-70, -176, -104 + sw, -110, -126 + sw, -8);
+  const hem = [[-126, -8], [-108, 2], [-96, -14], [-80, 4], [-64, -12], [-44, 4], [-26, -10], [-6, 4], [12, -8], [30, 4], [48, -10]];
+  for (const [x, y] of hem) ctx.lineTo(x + (x < -60 ? sw : 0), y + fk(x, 2));
+  ctx.lineTo(44, -110); ctx.lineTo(38, -186); ctx.closePath(); P(C.cloak, 3);
+  ctx.strokeStyle = C.cloakD; ctx.lineWidth = 3;
+  for (const [x0, y0, x1, y1] of [[-40, -160, -96, -20], [-20, -150, -60, -16], [-60, -150, -118, -30]]) { ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo((x0 + x1) / 2 - 8, (y0 + y1) / 2, x1 + sw, y1); ctx.stroke(); }
+  hemFlames(-128 + sw, 50, 0, 9, 1, 34);
+  // ---- back arm: heavy gauntlet hanging at the side ----
+  limb([-40, -172, -54, -128, -58, -92], 17, C.obs);
+  ctx.beginPath(); ctx.moveTo(-50, -126); ctx.lineTo(-56, -100); ctx.strokeStyle = C.lava; ctx.lineWidth = 2.5; ctx.stroke();
+  claw(-58, -88, 1.9, true);
+  // ---- inner robe ----
+  ctx.beginPath(); ctx.moveTo(-22, -178); ctx.lineTo(30, -178); ctx.lineTo(40, -60); ctx.lineTo(46, -4);
+  for (const [x, y] of [[34, -18], [24, 0], [12, -20], [2, 2], [-8, -16], [-20, 0], [-30, -14]]) ctx.lineTo(x, y + fk(x, 2));
+  ctx.lineTo(-36, -60); ctx.closePath(); P(C.robe, 3);
+  ctx.strokeStyle = C.lava; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(-8, -170); ctx.lineTo(-12, -130); ctx.lineTo(-6, -100); ctx.lineTo(-12, -60); ctx.moveTo(18, -170); ctx.lineTo(22, -120); ctx.lineTo(16, -86); ctx.lineTo(22, -44); ctx.stroke();
+  const gemD = (x, y, sc) => { poly([x, y - 12 * sc, x + 7 * sc, y, x, y + 12 * sc, x - 7 * sc, y]); P(C.obs2, 2); poly([x, y - 7 * sc, x + 4 * sc, y, x, y + 7 * sc, x - 4 * sc, y]); ctx.fillStyle = C.gem; ctx.fill(); };
+  gemD(-8, -92, 0.9); gemD(18, -76, 0.9); gemD(-6, -50, 0.8);
+  hemFlames(-34, 46, 0, 6, 7, 26);
+  // ---- front cloak flap ----
+  ctx.beginPath(); ctx.moveTo(26, -184); ctx.quadraticCurveTo(56, -130, 60, -20);
+  for (const [x, y] of [[50, -4], [44, -22], [36, -6], [30, -40]]) ctx.lineTo(x, y + fk(x + 7, 2));
+  ctx.quadraticCurveTo(28, -110, 14, -176); ctx.closePath(); P(C.cloak, 3);
+  ctx.beginPath(); ctx.moveTo(34, -150); ctx.quadraticCurveTo(46, -90, 44, -30); ctx.strokeStyle = C.cloakD; ctx.lineWidth = 3; ctx.stroke();
+  hemFlames(28, 62, -6, 3, 4, 22);
+  // ---- scarf / collar ----
+  ctx.beginPath(); ctx.moveTo(-34, -186); ctx.quadraticCurveTo(-30, -206, -8, -206); ctx.quadraticCurveTo(10, -196, 32, -208); ctx.quadraticCurveTo(50, -198, 44, -180);
+  ctx.quadraticCurveTo(20, -168, 6, -176); ctx.quadraticCurveTo(-14, -166, -34, -186); ctx.closePath(); P(C.cloak, 3);
+  ctx.beginPath(); ctx.moveTo(-20, -190); ctx.quadraticCurveTo(0, -182, 22, -192); ctx.strokeStyle = C.cloakD; ctx.lineWidth = 2.5; ctx.stroke();
+  poly([2, -178, 12, -160, 4, -148, 10, -132, -4, -150, -2, -164]); P(C.cloak, 2.5);
+  gemD(6, -178, 0.95);
+  // ---- pauldrons ----
+  const pauldron = (x, y, sc, flip) => {
+    ctx.save(); ctx.translate(x, y); ctx.scale(sc * flip, sc);
+    poly([-22, 8, -24, -8, -12, -18, -4, -40, 4, -18, 20, -14, 24, 6, 10, 16, -10, 16]); P(C.obs, 3);
+    poly([4, -18, 20, -14, 24, 6, 10, 16]); ctx.fillStyle = C.obs2; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-16, 2); ctx.lineTo(-6, -8); ctx.lineTo(8, -6); ctx.lineTo(14, 8); ctx.strokeStyle = C.lava; ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.restore();
+  };
+  pauldron(-34, -184, 1, -1);
+  // ---- head: obsidian helm, shadowed face, glowing slit eyes ----
+  ctx.save(); ctx.translate(6, -212);
+  ctx.beginPath(); ctx.moveTo(-20, 10); ctx.quadraticCurveTo(-24, -14, -12, -26); ctx.lineTo(12, -26); ctx.quadraticCurveTo(24, -14, 20, 10); ctx.quadraticCurveTo(0, 18, -20, 10); ctx.closePath(); P(C.obs, 3);
+  ctx.beginPath(); ctx.moveTo(-13, 8); ctx.quadraticCurveTo(-15, -8, -8, -16); ctx.lineTo(8, -16); ctx.quadraticCurveTo(15, -8, 13, 8); ctx.quadraticCurveTo(0, 13, -13, 8); ctx.closePath(); ctx.fillStyle = fl ? '#fff' : '#0e0406'; ctx.fill();
+  const ge = raise ? 1 : 0.7 + 0.3 * Math.sin(t * 4);
+  circ(0, -4, 14); ctx.fillStyle = `rgba(255,150,40,${0.16 * ge})`; ctx.fill();
+  for (const sg of [-1, 1]) { poly([sg * 2, -3, sg * 11, -7.5, sg * 9, -2.2]); ctx.fillStyle = C.eye; ctx.fill(); circ(sg * 7.5, -4.8, 1); ctx.fillStyle = fl ? '#fff' : '#fff2c0'; ctx.fill(); }
+  for (const sg of [-1, 1]) { ctx.beginPath(); ctx.moveTo(sg * 14, -20); ctx.quadraticCurveTo(sg * 30, -30, sg * 30, -52); ctx.quadraticCurveTo(sg * 22, -36, sg * 8, -26); ctx.closePath(); P(C.obs, 2.5); }
+  for (const sg of [-1, 1]) { poly([sg * 6, -26, sg * 14, -44, sg * 16, -24]); P(C.obs, 2.5); }
+  poly([-10, -24, 0, -62, 10, -24]); P(C.obs, 2.5);
+  poly([0, -52, 5, -36, 0, -26, -5, -36]); ctx.fillStyle = C.gem; ctx.fill(); poly([0, -46, 2.5, -36, 0, -31]); ctx.fillStyle = C.f3; ctx.fill();
+  ctx.restore();
+  pauldron(40, -182, 1.05, 1);
+  // ---- front arm: cloak-draped, obsidian claw holding flame ----
+  const H = raise ? [70, -222] : slam ? [98, -112] : [86, -140 + Math.sin(t * 2.4) * 3];
+  const E = raise ? [66, -178] : slam ? [78, -140] : [70, -146];
+  limb([40, -172, E[0], E[1], H[0], H[1]], 16, C.obs);
+  ctx.beginPath(); ctx.moveTo(E[0] - 4, E[1] + 6); ctx.lineTo(H[0] - 6, H[1] + 4); ctx.strokeStyle = C.lava; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(30, -186); ctx.quadraticCurveTo(E[0] - 10, E[1] - 16, E[0] + 6, E[1] - 4);
+  ctx.lineTo(E[0] + 4, E[1] + 20); ctx.lineTo(E[0] - 6, E[1] + 10); ctx.lineTo(E[0] - 12, E[1] + 30); ctx.lineTo(E[0] - 22, E[1] + 14); ctx.lineTo(E[0] - 28, E[1] + 34);
+  ctx.quadraticCurveTo(30, -130, 30, -160); ctx.closePath(); P(C.cloak, 2.5);
+  const ha = raise ? -1.4 : slam ? 0.1 : -1.2;
+  claw(H[0], H[1], ha, false);
+  flame(H[0] + Math.cos(ha) * 14, H[1] + Math.sin(ha) * 14 - 4, raise ? 1.5 : slam ? 1.3 : 1, 3);
+  for (let i = 0; i < 6; i++) { const k = (t * 0.6 + i / 6) % 1; circ(H[0] + Math.sin(t * 3 + i * 2) * 14, H[1] - 40 - k * 60, 2.2 * (1 - k) + 0.5); ctx.fillStyle = i % 2 ? C.f2 : C.f3; ctx.globalAlpha = ga * (1 - k); ctx.fill(); }
+  ctx.globalAlpha = ga;
+  ctx.restore(); curOL = OL; ctx.globalAlpha = 1;
+}
+function drawNebulon(e) {
+  const fl = e.flash > 0, t = e.t, st = e.state;
+  const C = fl ? { cloak: '#fff', cloakD: '#fff', lining: '#fff', gold: '#fff', goldD: '#fff', gem: '#fff', glow: '#fff' }
+    : { cloak: '#261c42', cloakD: '#17102a', lining: '#6c42d4', gold: '#dcb57c', goldD: '#9a7a4a', gem: '#a86aff', glow: '#c08aff' };
+  ctx.save(); ctx.translate(e.x - camX, e.y - e.z); ctx.scale(e.face, 1);
+  let ga = e.alpha ?? 1; if (st === 'dead') ga *= clamp(1 - (e.st - 0.6) / 0.7, 0, 1); ctx.globalAlpha = ga;
+  const L = 22 + Math.sin(t * 1.8) * 6, act = st === 'windup' || st === 'vwind' || st === 'attack';
+  const w = 112 + (act ? 18 : 0) + Math.sin(t * 1.5) * 4, top = -220 - L, bot = -24 - L;
+  curOL = '#0a0616';
+  const gem = (x, y, sc) => { poly([x, y - 11 * sc, x + 7 * sc, y, x, y + 11 * sc, x - 7 * sc, y]); P(C.gold, 2); poly([x, y - 7 * sc, x + 4 * sc, y, x, y + 7 * sc, x - 4 * sc, y]); ctx.fillStyle = C.gem; ctx.fill(); poly([x, y - 6 * sc, x + 2 * sc, y - 1, x - 1, y]); ctx.fillStyle = '#efe0ff'; ctx.fill(); };
+  for (let i = 0; i < 7; i++) { const k = (t * 0.45 + i / 7) % 1, x = (hash(i * 3.1) - 0.5) * 70, y = bot - 10 + k * (L + 20); ctx.globalAlpha = ga * (1 - k); poly([x, y - 7, x + 4, y, x, y + 7, x - 4, y]); ctx.fillStyle = C.lining; ctx.fill(); }
+  ctx.globalAlpha = ga;
+  // void inside
+  ctx.save(); poly([-30, top + 60, 30, top + 60, 62, bot + 10, -62, bot + 10]); ctx.clip();
+  let g = ctx.createLinearGradient(0, top + 60, 0, bot); g.addColorStop(0, '#07040f'); g.addColorStop(1, fl ? '#fff' : '#2a1256'); ctx.fillStyle = g; ctx.fillRect(-70, top + 50, 140, bot - top);
+  for (let i = 0; i < 18; i++) { circ((hash(i) - 0.5) * 110, top + 70 + hash(i + 7) * (bot - top - 60), 1 + hash(i + 3)); ctx.fillStyle = `rgba(255,255,255,${0.4 + 0.6 * Math.abs(Math.sin(t * 2 + i))})`; ctx.fill(); }
+  ctx.beginPath(); ctx.moveTo(-20, bot - 10); ctx.bezierCurveTo(30, bot - 50, -30, bot - 90, 16, top + 110 + Math.sin(t) * 6); ctx.strokeStyle = 'rgba(160,90,255,.45)'; ctx.lineWidth = 10; ctx.stroke();
+  ctx.restore();
+  // cloak halves
+  for (const sd of [-1, 1]) {
+    const half = (ww, hem) => {
+      ctx.beginPath(); ctx.moveTo(sd * 12, top + 44); ctx.quadraticCurveTo(sd * 46, top + 44, sd * 58, top + 62);
+      ctx.quadraticCurveTo(sd * (ww * 0.9), top + 150, sd * ww, bot + hem);
+      for (let i = 1; i <= 5; i++) { const x = sd * (ww - i * (ww - 26) / 5), y = bot + hem + (i % 2 ? 18 : -2) + hash(i + sd * 5) * 8 + Math.sin(t * 2 + i) * 2; ctx.lineTo(x, y); }
+      ctx.lineTo(sd * 22, bot + hem - 6); ctx.quadraticCurveTo(sd * 30, top + 150, sd * 20, top + 66); ctx.closePath();
+    };
+    half(w + 10, 8); P(C.lining, 3);
+    half(w, 0); P(C.cloak, 3);
+    ctx.beginPath(); ctx.moveTo(sd * 22, bot - 6); ctx.quadraticCurveTo(sd * 30, top + 150, sd * 20, top + 66); ctx.lineCap = 'round'; ctx.strokeStyle = curOL; ctx.lineWidth = 7; ctx.stroke(); ctx.strokeStyle = C.gold; ctx.lineWidth = 3.5; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sd * 48, top + 70); ctx.quadraticCurveTo(sd * 70, top + 140, sd * (w * 0.62), bot + 8); ctx.strokeStyle = curOL; ctx.lineWidth = 7; ctx.stroke(); ctx.strokeStyle = C.gold; ctx.lineWidth = 3.5; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sd * 30, top + 96); ctx.quadraticCurveTo(sd * 56, top + 130, sd * 84, top + 128); ctx.strokeStyle = C.goldD; ctx.lineWidth = 2; ctx.stroke();
+    gem(sd * 60, top + 96, 1); gem(sd * (w * 0.55), top + 150, 1); gem(sd * (w * 0.7), bot - 14, 1.2); gem(sd * 30, top + 170, 0.8);
+  }
+  // mantle + collar
+  ctx.beginPath(); ctx.moveTo(-60, top + 64); ctx.quadraticCurveTo(0, top + 30, 60, top + 64); ctx.quadraticCurveTo(40, top + 84, 0, top + 80); ctx.quadraticCurveTo(-40, top + 84, -60, top + 64); ctx.closePath(); P(C.cloakD, 3);
+  ctx.beginPath(); ctx.moveTo(-54, top + 68); ctx.quadraticCurveTo(0, top + 100, 54, top + 68); ctx.strokeStyle = C.gold; ctx.lineWidth = 2.5; ctx.stroke();
+  for (const sd of [-1, 1]) gem(sd * 50, top + 62, 1.1);
+  gem(0, top + 92, 1.3); limb([0, top + 104, 0, top + 116], 2, C.gold); gem(0, top + 122, 0.6);
+  // hood
+  ctx.beginPath(); ctx.moveTo(-30, top + 56); ctx.quadraticCurveTo(-34, top + 14, -8, top - 4); ctx.lineTo(0, top - 12); ctx.lineTo(8, top - 4); ctx.quadraticCurveTo(34, top + 14, 30, top + 56); ctx.quadraticCurveTo(0, top + 66, -30, top + 56); ctx.closePath(); P(C.cloak, 3);
+  ctx.beginPath(); ctx.ellipse(2, top + 34, 18, 20, 0, 0, PI * 2); ctx.fillStyle = '#040208'; ctx.fill();
+  const sg = act ? 1 : 0.6 + 0.4 * Math.sin(t * 3);
+  circ(4, top + 40, 16); ctx.fillStyle = `rgba(190,120,255,${0.25 * sg})`; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-8, top + 36); ctx.quadraticCurveTo(4, top + 50, 16, top + 36); ctx.quadraticCurveTo(4, top + 44, -8, top + 36); ctx.closePath(); ctx.fillStyle = fl ? '#fff' : `rgba(210,160,255,${0.7 + 0.3 * sg})`; ctx.fill();
+  // halo (back half) + crown + halo front
+  const ring = (a0, a1) => { ctx.beginPath(); ctx.ellipse(0, top + 2, 70, 13, -0.06, a0, a1); ctx.strokeStyle = curOL; ctx.lineWidth = 7; ctx.stroke(); ctx.strokeStyle = C.glow; ctx.lineWidth = 3.5; ctx.stroke(); };
+  ring(PI, PI * 2);
+  ctx.beginPath(); ctx.roundRect(-26, top - 8, 52, 10, 3); P(C.gold, 2.5);
+  for (const [x, h, wd] of [[-22, 22, 4], [-12, 34, 5], [0, 52, 7], [12, 34, 5], [22, 22, 4]]) { poly([x - wd, top - 6, x, top - 6 - h, x + wd, top - 6]); P(C.gold, 2.5); }
+  gem(0, top - 22, 1.3);
+  ring(0, PI);
+  for (const a of [0.2, 2.9, 4.6]) { const x = Math.cos(a + t * 0.6) * 70, y = top + 2 + Math.sin(a + t * 0.6) * 13; poly([x, y - 7, x + 2, y - 2, x + 7, y, x + 2, y + 2, x, y + 7, x - 2, y + 2, x - 7, y, x - 2, y - 2]); ctx.fillStyle = C.glow; ctx.fill(); }
+  for (let i = 0; i < 3; i++) { const x = [-120, 116, -96][i], y = top + [70, 50, 150][i] + Math.sin(t * 2 + i * 2) * 8; gem(x, y, 1.4); }
+  ctx.restore(); curOL = OL; ctx.globalAlpha = 1;
+  if (e.untarget && st !== 'dead') {
+    const x = e.x - camX, y = e.y - e.z - 130, r = 130 + Math.sin(now() * 8) * 6;
+    circ(x, y, r); ctx.fillStyle = 'rgba(200,106,255,.18)'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#e0b0ff'; ctx.stroke();
+  }
+}
 function drawKaiStaff(hx, hy, ang, face, t, fl) {
   const dx = Math.sin(ang) * face, dy = -Math.cos(ang), nx = -dy, ny = dx;
   const top = [hx + dx * 150, hy + dy * 150], bot = [hx - dx * 100, hy - dy * 100];
@@ -2535,6 +3626,15 @@ function drawEProj(p) {
 function drawHeroProj(p) {
   if (p.kind === 'wave') return drawWave(p);
   const x = p.x - camX, y = p.y - 52;
+  if (p.kind === 'kunai') {
+    const ang = Math.atan2(p.vy * 0.8, p.face * 1100 * Math.cos(p.ang));
+    ctx.save(); ctx.translate(x, p.y - 58); ctx.rotate(ang);
+    ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.moveTo(-64, 0); ctx.lineTo(-16, 0); ctx.strokeStyle = '#f0e0ff'; ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 1;
+    curOL = OL; limb([-16, 0, -5, 0], 3, '#6a1f2e');
+    ctx.beginPath(); ctx.arc(-20, 0, 3.5, 0, PI * 2); ctx.lineWidth = 2.5; ctx.strokeStyle = OL; ctx.stroke();
+    poly([-6, -4.5, 11, 0, -6, 4.5, -3, 0]); P('#dfe5ee', 2);
+    ctx.restore(); return;
+  }
   if (p.kind === 'arrow' || p.kind === 'bomb') {
     const f = p.face, len = p.big ? 58 : 40, w = p.big ? 5 : 3, ay = p.y - 60;
     if (p.big) { ctx.globalAlpha = 0.5; limb([x - f * 90, ay, x, ay], 12, '#fff3b0'); ctx.globalAlpha = 1; }
@@ -2627,6 +3727,12 @@ function drawProp(type, x, y, s, h) {
     ctx.fillStyle = '#3f9a3a'; for (const k of c) { circ(k[0], k[1], k[2]); ctx.fill(); }
     ctx.fillStyle = '#5fbf50'; for (const k of c) { circ(k[0] - 3, k[1] - 4, k[2] * 0.5); ctx.fill(); }
     circ(-8, -18, 3.5); P('#e8453a', 2); circ(12, -26, 3.5); P('#ff8a3a', 2);
+  } else if (type === 'darktree') {
+    curOL = '#07120a';
+    limb([0, 0, -3, -40, 4, -80], 12, '#3a2c22'); limb([-2, -46, -22, -66], 5, '#3a2c22'); limb([2, -60, 24, -78], 5, '#3a2c22');
+    for (const [ox, oy, r] of [[-24, -84, 26], [20, -92, 28], [-2, -114, 30]]) { circ(ox, oy, r); P(h > 0.5 ? '#1f4a30' : '#264f36'); }
+    circ(-10, -122, 9); ctx.fillStyle = 'rgba(170,230,150,.14)'; ctx.fill();
+    if (h > 0.75) { circ(6, -92, 2.2); ctx.fillStyle = '#d8ff6a'; ctx.fill(); circ(14, -92, 2.2); ctx.fill(); }
   } else if (type === 'deadtree') {
     curOL = '#120a0c';
     limb([0, 0, 2, -30, -4, -54], 6, '#3a2c2e'); limb([1, -26, 14, -40, 22, -42], 3, '#3a2c2e'); limb([-2, -40, -16, -50], 3, '#3a2c2e');
@@ -2661,7 +3767,12 @@ function drawProp(type, x, y, s, h) {
 }
 function drawFence(type, sx, by, next, i) {
   const h = hash(i * 7.3);
-  if (type === 'fence') {
+  if (type === 'roots') {
+    curOL = '#0a140c';
+    if (next) { ctx.beginPath(); ctx.moveTo(sx, by - 4); ctx.quadraticCurveTo(sx + 48, by - 30 - h * 16, sx + 96, by - 4); ctx.lineCap = 'round'; ctx.strokeStyle = curOL; ctx.lineWidth = 12; ctx.stroke(); ctx.strokeStyle = '#4a3828'; ctx.lineWidth = 6; ctx.stroke(); }
+    poly([sx - 7, by, sx - 5, by - 26, sx, by - 34, sx + 5, by - 24, sx + 7, by]); P('#4a3828', 2.5);
+    curOL = OL;
+  } else if (type === 'fence') {
     curOL = '#4a2f1b';
     if (next) for (const ry of [-22, -10]) { ctx.beginPath(); ctx.roundRect(sx, by + ry, 96, 6, 2); P('#b27d4f', 2.5); }
     poly([sx - 5, by, sx - 5, by - 32, sx, by - 38, sx + 5, by - 32, sx + 5, by]); P('#a8744a', 2.5);
@@ -2725,6 +3836,17 @@ function drawTent(x, y, seed) {
 function drawLandmark(type, x, y, seed) {
   const tt = now();
   if (type === 'tent') return drawTent(x, y, seed);
+  if (type === 'stump') {
+    curOL = '#0a140c';
+    for (const [dx, dy] of [[-70, 4], [60, 6], [-40, 10]]) limb([x + dx * 0.5, y - 8, x + dx, y + dy], 9, '#3e2c1e');
+    poly([x - 66, y, x - 54, y - 88, x - 60, y - 118, x - 28, y - 110, x - 8, y - 128, x + 20, y - 112, x + 50, y - 122, x + 54, y - 86, x + 68, y]); P('#4a3626', 3);
+    ctx.beginPath(); ctx.ellipse(x - 4, y - 116, 48, 11, 0, 0, PI * 2); P('#8a6a48', 2.5);
+    for (const r of [34, 20, 8]) { ctx.beginPath(); ctx.ellipse(x - 4, y - 116, r, r * 0.23, 0, 0, PI * 2); ctx.strokeStyle = '#5e4630'; ctx.lineWidth = 2; ctx.stroke(); }
+    ctx.beginPath(); ctx.ellipse(x + 2, y - 44, 18, 28, 0, 0, PI * 2); P('#120c08', 2.5);
+    if (Math.sin(tt * 0.9 + seed * 2) < 0.93) { for (const ox of [-5, 7]) { circ(x + ox, y - 52, 2.6); ctx.fillStyle = '#d8ff6a'; ctx.fill(); } }
+    for (const [mx, my, c] of [[-44, -30, '#7ae0c8'], [-50, -46, '#7ae0c8'], [48, -60, '#c88aff']]) { ctx.beginPath(); ctx.ellipse(x + mx, y + my, 9, 5, 0, PI, 0); ctx.closePath(); P(c, 2); }
+    curOL = OL; return;
+  }
   if (type === 'obelisk') {
     curOL = '#7d5a2c';
     poly([x - 18, y, x - 11, y - 150, x, y - 170, x + 11, y - 150, x + 18, y]); P('#e2bf82');
@@ -2797,6 +3919,18 @@ function drawDeco(type, sx, y, h1, h3) {
         limb([sx, y, sx + 1, y - 12], 1.5, '#3f8a2e'); for (let k = 0; k < 5; k++) { const a = k / 5 * PI * 2; circ(sx + 1 + Math.cos(a) * 4, y - 13 + Math.sin(a) * 4, 3); P(c, 1.5); } circ(sx + 1, y - 13, 2.4); P('#f2b33d', 1.5); }
       else if (h3 < 0.74) rock(sx, y, h1, '#a9adb6', '#d3d7de');
       else if (h3 < 0.9) stroke(sx, y, '#5ea63e');
+      break;
+    case 'forest':
+      if (h3 < 0.22) { ctx.save(); ctx.translate(sx, y); const s = 0.7 + h1 * 0.6; ctx.scale(s, s); curOL = '#0c1a10';
+        for (const a of [-0.9, -0.4, 0.1, 0.6]) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(Math.sin(a) * 10, -12, Math.sin(a) * 18, -18 + Math.abs(a) * 6); ctx.lineCap = 'round'; ctx.strokeStyle = curOL; ctx.lineWidth = 6; ctx.stroke(); ctx.strokeStyle = '#3a7a44'; ctx.lineWidth = 3; ctx.stroke(); }
+        ctx.restore(); curOL = OL; }
+      else if (h3 < 0.32) { const c = h1 < 0.5 ? '#7ae0c8' : '#c88aff', g = 0.6 + 0.4 * Math.sin(now() * 2 + sx * 0.05);
+        circ(sx, y - 9, 12); ctx.fillStyle = c + '33'; ctx.globalAlpha = g; ctx.fill(); ctx.globalAlpha = 1;
+        ctx.beginPath(); ctx.roundRect(sx - 2.5, y - 9, 5, 9, 2); curOL = '#0c1a10'; P('#e8e0d0', 2);
+        ctx.beginPath(); ctx.ellipse(sx, y - 9, 8, 5, 0, PI, 0); ctx.closePath(); P(c, 2); curOL = OL; }
+      else if (h3 < 0.4) { ctx.beginPath(); ctx.moveTo(sx - 14, y); ctx.quadraticCurveTo(sx, y - 12, sx + 14, y); ctx.lineCap = 'round'; ctx.strokeStyle = '#0c1a10'; ctx.lineWidth = 8; ctx.stroke(); ctx.strokeStyle = '#4a3828'; ctx.lineWidth = 4; ctx.stroke(); }
+      else if (h3 < 0.46) rock(sx, y, h1, '#4a5a50', '#6a7a70');
+      else if (h3 < 0.7) stroke(sx, y, '#3a6a3a');
       break;
     case 'desert':
       if (h3 < 0.3) { ctx.beginPath(); ctx.ellipse(sx, y, 5 + h1 * 4, 3 + h1 * 2, 0, 0, PI * 2); curOL = '#8a6a3a'; P('#d8b47a', 2); }
@@ -2931,6 +4065,21 @@ function drawWorld() {
       poly([x - 62 * s, y - 56 * s, x, y - 84 * s, x + 62 * s, y - 56 * s]); P('#e8c050', 2);
     }
     curOL = OL;
+  } else if (F.t === 'forest') {
+    for (let layer = 0; layer < 2; layer++) {
+      const par = 0.05 + layer * 0.06, step = 64 - layer * 8, off = camX * par, i0 = Math.floor(off / step) - 2, i1 = i0 + Math.ceil(W / step) + 4;
+      ctx.fillStyle = layer ? '#142a22' : '#1c382e';
+      for (let i = i0; i <= i1; i++) {
+        const x = i * step - off, h = 150 + hash(i * 3.7 + layer * 11) * 160, w = 30 + hash(i * 1.3 + layer * 7) * 26;
+        poly([x - w, 362, x - w * 0.45, 362 - h * 0.42, x - w * 0.7, 362 - h * 0.42, x - w * 0.3, 362 - h * 0.7, x - w * 0.5, 362 - h * 0.7, x, 362 - h,
+          x + w * 0.5, 362 - h * 0.7, x + w * 0.3, 362 - h * 0.7, x + w * 0.7, 362 - h * 0.42, x + w * 0.45, 362 - h * 0.42, x + w, 362]); ctx.fill();
+      }
+    }
+    for (let i = 0; i < 6; i++) {
+      if (Math.sin(tm * 0.8 + i * 2.3) > 0.9) continue;
+      const x = ((hash(i + 40) * W * 1.3 - camX * 0.1) % (W * 1.3) + W * 1.3) % (W * 1.3), y = 250 + hash(i + 41) * 90;
+      for (const ox of [0, 9]) { circ(x + ox, y, 2.3); ctx.fillStyle = i % 2 ? '#d8ff6a' : '#ffb84a'; ctx.fill(); }
+    }
   } else if (F.t === 'volcano') {
     drawRange(0.05, 160, 362, 60, 150, '#3a2428', '#1a0e12', 3, false);
     const x = 700 - camX * 0.06, er = G.erupt > 0;
@@ -3102,6 +4251,13 @@ function drawForeground() {
       ctx.restore(); curOL = OL;
     }
     ctx.globalAlpha = 1;
+  } else if (th.part === 'firefly') {
+    const vg = ctx.createRadialGradient(W / 2, H * 0.55, 260, W / 2, H * 0.55, 820); vg.addColorStop(0, 'rgba(0,10,6,0)'); vg.addColorStop(1, 'rgba(0,10,6,.5)');
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 34; i++) {
+      const x = hash(i + 2) * W + Math.sin(tm * 0.7 + i) * 40, y = 200 + hash(i) * 460 + Math.sin(tm * 1.1 + i * 2) * 20, g = 0.5 + 0.5 * Math.sin(tm * 3 + i * 1.7);
+      circ(x, y, 7); ctx.fillStyle = `rgba(210,255,120,${0.14 * g})`; ctx.fill(); circ(x, y, 2); ctx.fillStyle = `rgba(230,255,150,${0.9 * g})`; ctx.fill();
+    }
   } else if (th.part === 'ember') {
     const n = G.erupt > 0 ? 90 : 50;
     for (let i = 0; i < n; i++) {
@@ -3156,6 +4312,22 @@ function drawIcon(cls, id, x, y, s) {
     } else {
       for (let i = 0; i < 4; i++) { const a = i * PI / 2 + 0.4; drawSword(cx + Math.cos(a) * 8, cy + Math.sin(a) * 8, PI / 2 - a, 20, R_PAL); curOL = OL; }
       circ(cx, cy, 6); P('#ffffff', 2);
+    }
+  } else if (cls === 'assassin') {
+    const kunai = (x1, y1, a, len = 24) => { ctx.save(); ctx.translate(x1, y1); ctx.rotate(a);
+      limb([-len * 0.6, 0, -len * 0.15, 0], 3, '#6a1f2e'); ctx.beginPath(); ctx.arc(-len * 0.6 - 3.5, 0, 3.5, 0, PI * 2); ctx.lineWidth = 2; ctx.strokeStyle = OL; ctx.stroke();
+      poly([-len * 0.15, -4.5, len * 0.5, 0, -len * 0.15, 4.5]); P('#f2f5fa', 2); ctx.restore(); };
+    const sil = (ox, oy, sc, col) => { ctx.save(); ctx.translate(ox, oy); ctx.scale(sc, sc);
+      poly([-9, 18, -7, -2, 7, -2, 9, 18]); P(col, 2); circ(0, -9, 8); P(col, 2); limb([-8, -10, 8, -10], 2.5, '#d62f45'); ctx.restore(); };
+    if (id === 'Q') { for (const a of [-0.5, 0, 0.5]) kunai(cx - 4 + Math.cos(a) * 4, cy + Math.sin(a) * 10, a); }
+    else if (id === 'W') { sil(cx - 11, cy + 4, 1, '#5a4a8a'); sil(cx + 11, cy + 4, 1, '#5a4a8a'); sil(cx, cy + 1, 1.1, '#2b2e40'); }
+    else if (id === 'E') {
+      for (let i = 0; i < 5; i++) { circ(x + 8 + i * 8, cy + 10 + (i % 2) * 5, 8); ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fill(); }
+      ctx.beginPath(); ctx.ellipse(cx, cy - 4, 17, 9, 0, 0, PI * 2); ctx.setLineDash([4, 3]); ctx.lineWidth = 3; ctx.strokeStyle = '#ffffff'; ctx.stroke(); ctx.setLineDash([]);
+      circ(cx, cy - 4, 4); ctx.fillStyle = '#ffffff'; ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.arc(cx + 2, cy - 2, 18, 0, PI * 2); ctx.arc(cx + 10, cy - 8, 15, 0, PI * 2, true); ctx.fillStyle = '#ffd0da'; ctx.fill('evenodd');
+      kunai(cx - 4, cy + 10, -0.6, 22); kunai(cx + 8, cy + 14, -0.9, 18);
     }
   } else if (cls === 'archer') {
     const arrow = (x1, y1, x2, y2, c = '#fff3b0') => {
@@ -3249,7 +4421,7 @@ function drawHUD() {
   outlinedText(`Lv.${hero.lvl} ${CL().name}`, 86, 38, 20, '#ffffff', OL, 5, 'left');
   ctx.font = `12px "Noto Sans KR",sans-serif`; ctx.textAlign = 'left'; ctx.fillStyle = '#9aa4ba';
   ctx.fillText(`EXP ${Math.floor(hero.exp)} / ${expNeed()}   처치 ${G.kills}`, 87, 62);
-  outlinedText(`STAGE ${G.si + 1} · ${ST().name} · ${ST().zones[G.cz]}`, W / 2, 30, 21, '#ffffff', OL, 5);
+  outlinedText(`STAGE ${stageNo(G.si)} · ${ST().name} · ${ST().zones[G.cz]}`, W / 2, 30, 21, '#ffffff', OL, 5);
   for (let i = 0; i < 3; i++) {
     const x = W / 2 - 30 + i * 30; ctx.beginPath(); ctx.roundRect(x - 9, 50, 18, 8, 3);
     P(i < G.cz || (i === G.cz && G.cleared) ? '#ffd35c' : i === G.cz ? '#ffffff' : '#4a5470', 2);
@@ -3372,6 +4544,7 @@ function render() {
   drawBarrier();
   const list = [];
   list.push({ y: hero.y, d: drawHero });
+  for (const c of clones) list.push({ y: c.y - 0.01, d: () => drawClone(c) });
   for (const e of enemies) list.push({ y: e.y + 0.01, d: () => drawMob(e) });
   for (const p of potions) list.push({ y: p.y - 1, d: () => drawPotion(p) });
   for (const p of projectiles) list.push({ y: p.y + 2, d: () => drawHeroProj(p) });
@@ -3441,61 +4614,375 @@ addEventListener('blur', () => { mouse.rDown = false; });
 addEventListener('keydown', e => {
   const map = { KeyQ: 'Q', KeyW: 'W', KeyE: 'E', KeyR: 'R' };
   if (map[e.code]) { e.preventDefault(); castSkill(map[e.code]); }
-  if (e.code === 'KeyM') muted = !muted;
+  if (e.code === 'KeyM') { muted = !muted; MUSIC.setMute(muted); }
 });
 
 // ---------- panels ----------
 let pick = 0, pickCls = 'sword';
-function showTitle() {
-  save = loadSave();
-  pickCls = save.cls || 'sword';
-  pick = Math.min(save[pickCls].unlocked, STAGES.length - 1);
-  newGame(pick, pickCls, 1, 0);
-  const draw = () => {
-    const sv = save[pickCls], C = CLASSES[pickCls];
-    const chips = STAGES.map((s, i) => `<button class="st" data-i="${i}" aria-pressed="${i === pick}" ${i > sv.unlocked && !TEST_MODE ? 'disabled' : ''}><b>${i + 1}</b>${s.name.split(',')[0]}</button>`).join('');
-    const cls = Object.entries(CLASSES).map(([k, c]) => `<button class="cls" data-c="${k}" aria-pressed="${k === pickCls}"><b>${c.name}</b><span>${c.desc}</span><span>Lv.${save[k].lvl} · STAGE ${save[k].unlocked + 1}까지 열림</span></button>`).join('');
-    const sk = C.skills;
-    panel.innerHTML = `
-      <div class="eyebrow">8 STAGES · 초원에서 공허의 끝까지${TEST_MODE ? ' · 테스트 버전' : ''}</div>
-      <h1>쌈@뽕 검사</h1>
-      <p>초원에서 시작해 사막, 계곡, 바닷가, 바다의 섬, 화산섬, 우주를 지나 공허의 끝까지. 4스테이지부터는 보스마다 고유한 패턴과 필살기가 있어요.</p>
-      <div class="label">직업</div>
-      <div class="classes">${cls}</div>
-      <div class="label">스테이지</div>
-      <div class="stages">${chips}</div>
-      <ul class="keys">
-        <li class="wide"><kbd>우클릭</kbd> 땅: 이동 · 적: ${pickCls === 'mage' ? '사거리까지 다가가 마법탄 연사' : pickCls === 'archer' ? '사거리까지 다가가 화살 연사' : '달려가서 연속 공격'}</li>
-        <li class="wide"><kbd>좌클릭</kbd> 보는 방향으로 돌진 · 돌진 중 무적 · 쿨타임 3초</li>
-        <li><kbd>Q</kbd> ${sk.Q.name}</li><li><kbd>W</kbd> ${sk.W.name}</li>
-        <li><kbd>E</kbd> ${sk.E.name}</li><li><kbd>R</kbd> ${sk.R.name}</li>
-      </ul>
-      <div class="row">
-        <button class="btn" id="go">${C.name}로 출격 · STAGE ${pick + 1}</button>
-        ${sv.unlocked > 0 ? '<button class="btn ghost" id="reset">처음부터</button>' : ''}
-      </div>
-      <small>${TEST_MODE ? `테스트 버전: 모든 스테이지가 열려 있고, 레벨이 낮으면 Lv.${testLevel(pick)}로 맞춰 출격합니다. ` : ''}${sv.unlocked > 0 ? `저장된 Lv.${sv.lvl}로 출격합니다. ` : ''}스킬은 마우스가 있는 방향으로 나갑니다. W와 R을 쓰는 동안은 무적이에요. 빨간 표시는 적의 공격 범위입니다. M 키로 소리를 끄고 켭니다.</small>`;
-    ui.hidden = false;
-    panel.querySelectorAll('.st').forEach(b => b.onclick = () => { pick = +b.dataset.i; G.si = pick; draw(); });
-    panel.querySelectorAll('.cls').forEach(b => b.onclick = () => {
-      pickCls = b.dataset.c; save.cls = pickCls; writeSave(save);
-      if (!TEST_MODE) pick = Math.min(pick, save[pickCls].unlocked); newGame(pick, pickCls, 1, 0); draw();
-    });
-    document.getElementById('go').onclick = () => {
-      save.cls = pickCls; writeSave(save);
-      let lv = sv.unlocked > 0 ? sv.lvl : 1, ex = sv.unlocked > 0 ? sv.exp : 0;
-      if (TEST_MODE && lv < testLevel(pick)) { lv = testLevel(pick); ex = 0; }
-      startStage(pick, pickCls, lv, ex);
-    };
-    const r = document.getElementById('reset');
-    if (r) r.onclick = () => { save[pickCls] = blankSave(); writeSave(save); pick = 0; G.si = 0; draw(); };
+// ---------- world map (title) ----------
+const titleEl = document.getElementById('title'), mapc = document.getElementById('mapc'), mctx = mapc.getContext('2d');
+const tside = document.getElementById('tside'), ttabs = document.getElementById('ttabs');
+const MW = 1600, MH = 900;
+let MS = 1, MOX = 0, MOY = 0, mdpr = 1, mapCh = 0, pickCh2 = 0, mapHover = -1, mapMsg = null;
+const CH1_NODES = [[230, 690], [520, 770], [560, 480], [860, 575], [1090, 712], [1318, 600], [1150, 250], [1440, 205]];
+const CH2_NODES = [[250, 650], [540, 540], [830, 680], [1110, 490], [1370, 320]];
+const RIFT = [1500, 470];
+const CHAPTERS = [{ name: '빛의 대륙', sub: 'CHAPTER 1' }, { name: '황혼의 세계', sub: 'CHAPTER 2' }];
+const CH2_COUNT = 5; // 2장 스테이지 5개 (내용은 추가 예정)
+function twilightOpen() { return TEST_MODE || !!save.twilight; }
+function clsOpen(k) { return !CLASSES[k].lock || twilightOpen(); }
+function stageState(i) {
+  const sv = save[pickCls];
+  if (!STAGES[i]) return 'soon';
+  if (i < sv.unlocked || (i === CH1_COUNT - 1 && sv.allClear) || i < (sv.lastClear || 0)) return 'clear';
+  if (i >= CH1_COUNT) return (TEST_MODE || (twilightOpen() && (i === CH1_COUNT || i <= sv.unlocked))) ? 'open' : 'lock';
+  if (TEST_MODE || i <= sv.unlocked) return 'open';
+  return 'lock';
+}
+const ch2Idx = j => CH1_COUNT + j;
+function resizeMap() {
+  if (titleEl.hidden) return;
+  mdpr = Math.min(window.devicePixelRatio || 1, 2);
+  const cw = innerWidth, ch = innerHeight;
+  mapc.width = Math.round(cw * mdpr); mapc.height = Math.round(ch * mdpr);
+  const r = tside.getBoundingClientRect(), narrow = cw <= 860;
+  const ay = narrow ? 104 : 0, aw = narrow ? cw : Math.max(240, r.left - 8), ah = narrow ? Math.max(160, r.top - 8 - ay) : ch;
+  MS = Math.min(aw / MW, ah / MH);
+  MOX = (aw - MW * MS) / 2; MOY = ay + (ah - MH * MS) / 2;
+}
+addEventListener('resize', resizeMap);
+function mapPt(e) { const r = mapc.getBoundingClientRect(); return { x: (e.clientX - r.left - MOX) / MS, y: (e.clientY - r.top - MOY) / MS }; }
+function mapHit(q) {
+  const nodes = mapCh === 0 ? CH1_NODES : CH2_NODES;
+  for (let i = 0; i < nodes.length; i++) if (Math.hypot(q.x - nodes[i][0], q.y - nodes[i][1]) < 48) return i;
+  if (mapCh === 0 && Math.hypot(q.x - RIFT[0], (q.y - RIFT[1]) * 0.7) < 70) return 'rift';
+  return -1;
+}
+mapc.addEventListener('pointerdown', e => {
+  initAudio(); if (AC && AC.state === 'suspended') AC.resume();
+  const h = mapHit(mapPt(e));
+  if (h === 'rift') { mapCh = 1; sfx('magic'); renderSide(); return; }
+  if (h === -1) return;
+  if (mapCh === 0) {
+    if (stageState(h) === 'lock') { mapMsg = { text: '이전 스테이지를 먼저 클리어하세요', until: now() + 1.6 }; sfx('warn'); return; }
+    pick = h; G.si = pick;
+  } else {
+    if (!twilightOpen()) { mapMsg = { text: '8스테이지를 클리어하면 열립니다', until: now() + 1.6 }; sfx('warn'); return; }
+    if (stageState(ch2Idx(h)) === 'lock') { mapMsg = { text: '이전 스테이지를 먼저 클리어하세요', until: now() + 1.6 }; sfx('warn'); return; }
+    pickCh2 = h;
+  }
+  sfx('pick'); renderSide();
+});
+mapc.addEventListener('pointermove', e => { const h = mapHit(mapPt(e)); mapHover = h; mapc.style.cursor = h === -1 ? 'default' : 'pointer'; });
+mapc.addEventListener('contextmenu', e => e.preventDefault());
+
+function mapBounds() { const cw = mapc.width / mdpr, ch = mapc.height / mdpr; return [-MOX / MS - 4, -MOY / MS - 4, (cw - MOX) / MS + 4, (ch - MOY) / MS + 4]; }
+function smoothPath(pts) {
+  ctx.beginPath(); const n = pts.length;
+  ctx.moveTo((pts[n - 1][0] + pts[0][0]) / 2, (pts[n - 1][1] + pts[0][1]) / 2);
+  for (let i = 0; i < n; i++) { const a = pts[i], b = pts[(i + 1) % n]; ctx.quadraticCurveTo(a[0], a[1], (a[0] + b[0]) / 2, (a[1] + b[1]) / 2); }
+  ctx.closePath();
+}
+function mTree(x, y, s = 1, col = '#4f9a3c') {
+  limb([x, y, x, y - 14 * s], 5 * s, '#7a4f2c');
+  circ(x, y - 24 * s, 14 * s); P(col, 2.5);
+  circ(x - 4 * s, y - 29 * s, 5 * s); ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.fill();
+}
+function mPalm(x, y, s = 1, t = 0) {
+  const tx0 = x + 3 * s, ty0 = y - 38 * s;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + 7 * s, y - 20 * s, tx0, ty0);
+  ctx.lineCap = 'round'; ctx.strokeStyle = OL; ctx.lineWidth = 8 * s; ctx.stroke(); ctx.strokeStyle = '#a0703f'; ctx.lineWidth = 4 * s; ctx.stroke();
+  for (let i = 0; i < 5; i++) {
+    const a = -PI / 2 + (i - 2) * 0.66 + Math.sin(t * 1.5 + i) * 0.05, ex = tx0 + Math.cos(a) * 26 * s, ey = ty0 + Math.sin(a) * 22 * s + 12 * s;
+    ctx.beginPath(); ctx.moveTo(tx0, ty0); ctx.quadraticCurveTo((tx0 + ex) / 2, (ty0 + ey) / 2 - 10 * s, ex, ey);
+    ctx.strokeStyle = OL; ctx.lineWidth = 8 * s; ctx.stroke(); ctx.strokeStyle = '#3f9a4a'; ctx.lineWidth = 4.5 * s; ctx.stroke();
+  }
+}
+function mMountain(x, y, w, h, col = '#9a8468', snow = true) {
+  poly([x - w, y, x, y - h, x + w, y]); P(col, 3);
+  poly([x, y - h, x + w, y, x + w * 0.15, y]); ctx.fillStyle = 'rgba(0,0,0,.15)'; ctx.fill();
+  if (snow) { poly([x - w * 0.34, y - h * 0.66, x, y - h, x + w * 0.34, y - h * 0.66, x + w * 0.12, y - h * 0.58, x - w * 0.04, y - h * 0.7, x - w * 0.2, y - h * 0.58]); P('#f4f6fb', 2); }
+}
+function mCactus(x, y, s = 1) {
+  limb([x, y, x, y - 26 * s], 7 * s, '#4f9a4a');
+  limb([x, y - 12 * s, x - 9 * s, y - 14 * s, x - 9 * s, y - 22 * s], 4.5 * s, '#4f9a4a');
+  limb([x, y - 16 * s, x + 8 * s, y - 18 * s, x + 8 * s, y - 25 * s], 4.5 * s, '#4f9a4a');
+}
+function mWave(x, y, t) {
+  const o = Math.sin(t * 2 + x * 0.05) * 3;
+  ctx.beginPath(); ctx.moveTo(x - 12, y + o); ctx.quadraticCurveTo(x - 6, y - 6 + o, x, y + o); ctx.quadraticCurveTo(x + 6, y - 6 + o, x + 12, y + o);
+  ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2.5; ctx.stroke();
+}
+function mStars(x0, y0, x1, y1, n, t, seed) {
+  for (let i = 0; i < n; i++) {
+    const x = x0 + hash(seed + i) * (x1 - x0), y = y0 + hash(seed + i * 7.3) * (y1 - y0), tw = 0.5 + 0.5 * Math.sin(t * (1 + hash(i) * 2) + i);
+    circ(x, y, 1 + hash(i * 3.1 + seed) * 1.8); ctx.fillStyle = `rgba(255,255,255,${0.25 + tw * 0.75})`; ctx.fill();
+  }
+}
+function mIsland(pts, sand, top) {
+  smoothPath(pts); ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 30; ctx.stroke();
+  ctx.strokeStyle = OL; ctx.lineWidth = 22; ctx.stroke(); ctx.strokeStyle = sand; ctx.lineWidth = 16; ctx.stroke();
+  ctx.fillStyle = top; ctx.fill();
+}
+function mPath(nodes, done, col = '#fff4d0') {
+  for (let i = 0; i < nodes.length - 1; i++) {
+    const [ax, ay] = nodes[i], [bx, by] = nodes[i + 1], mx = (ax + bx) / 2, my = (ay + by) / 2, dx = bx - ax, dy = by - ay, d = Math.hypot(dx, dy);
+    const off = (i % 2 ? 1 : -1) * Math.min(60, d * 0.18), cx = mx - dy / d * off, cy = my + dx / d * off;
+    const seg = () => { ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(cx, cy, bx, by); };
+    ctx.lineCap = 'round';
+    seg(); ctx.setLineDash([]); ctx.strokeStyle = 'rgba(31,34,48,.55)'; ctx.lineWidth = 11; ctx.stroke();
+    seg(); ctx.setLineDash(done(i) ? [] : [14, 12]); ctx.strokeStyle = done(i) ? '#ffd35c' : col; ctx.lineWidth = 6; ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+function mLock(x, y, s = 1) {
+  ctx.beginPath(); ctx.arc(x, y - 5 * s, 6.5 * s, PI, 0); ctx.lineCap = 'butt';
+  ctx.lineWidth = 7 * s; ctx.strokeStyle = OL; ctx.stroke(); ctx.lineWidth = 3.5 * s; ctx.strokeStyle = '#c8ccd8'; ctx.stroke();
+  ctx.beginPath(); ctx.roundRect(x - 9.5 * s, y - 5 * s, 19 * s, 15 * s, 3 * s); P('#e0aa3e', 2.5);
+  circ(x, y + 1.5 * s, 2.2 * s); ctx.fillStyle = OL; ctx.fill();
+}
+function mNode(x, y, num, label, st, sel, hov, t) {
+  ctx.beginPath(); ctx.ellipse(x, y + 24, 32, 9, 0, 0, PI * 2); ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fill();
+  if (sel) { const k = (t * 1.1) % 1; ctx.globalAlpha = 1 - k; ctx.beginPath(); ctx.ellipse(x, y + 22, 36 + k * 34, 11 + k * 10, 0, 0, PI * 2); ctx.lineWidth = 4; ctx.strokeStyle = '#ffd35c'; ctx.stroke(); ctx.globalAlpha = 1; }
+  const r = sel ? 30 : hov ? 29 : 26, bob = sel ? Math.sin(t * 3) * 2 : 0;
+  y += bob;
+  const fill = st === 'clear' ? '#ffd35c' : st === 'open' ? '#fff2d6' : st === 'soon' ? '#c3b2e6' : '#7a8196';
+  circ(x, y, r + 5); ctx.fillStyle = OL; ctx.fill();
+  circ(x, y, r); ctx.fillStyle = fill; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = sel ? '#ffffff' : '#3a3f55'; ctx.stroke();
+  circ(x, y, r - 7); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(31,34,48,.3)'; ctx.stroke();
+  outlinedText(num, x, y + 1, num.length > 2 ? 18 : 24, st === 'lock' ? '#e4e7f0' : '#1f2230', OL, st === 'lock' ? 5 : 0);
+  if (st === 'lock') mLock(x + 20, y - 20, 0.9);
+  if (st === 'clear') { limb([x + 16, y - r + 4, x + 16, y - r - 22], 2.5, '#6a4a2a'); poly([x + 17, y - r - 22, x + 36, y - r - 16, x + 17, y - r - 10]); P('#e0463a', 2); }
+  ctx.font = `17px ${FONT}`; const w = ctx.measureText(label).width + 24;
+  ctx.beginPath(); ctx.roundRect(x - w / 2, y + 38, w, 28, 6); ctx.fillStyle = sel ? '#e0aa3e' : 'rgba(27,33,48,.92)'; ctx.fill();
+  ctx.lineWidth = 2.5; ctx.strokeStyle = sel ? OL : '#c9a45c'; ctx.stroke();
+  outlinedText(label, x, y + 53, 17, sel ? '#1f2230' : st === 'lock' ? '#aab2c6' : '#ffffff', OL, 0);
+}
+function mHero(x, y, t) {
+  const c = pickCls;
+  ctx.beginPath(); ctx.ellipse(x, y, 20, 6, 0, 0, PI * 2); ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fill();
+  ctx.save(); ctx.translate(x, y); ctx.scale(0.72, 0.72);
+  drawPose(c, { ...PORTRAIT_PS, bob: Math.sin(t * 2.6) * 1.5, flap: Math.sin(t * 2) * 2, tail: Math.sin(t * 3), sword: c === 'mage' ? 2.95 : c === 'archer' ? 1.9 : 2.35, draw: 0 }, CLASSES[c].pal);
+  ctx.restore(); curOL = OL;
+}
+const LAND = [[80, 430], [200, 370], [360, 392], [470, 350], [640, 366], [760, 405], [880, 440], [960, 510], [990, 610], [945, 700], [900, 790], [780, 855], [600, 875], [420, 866], [260, 845], [130, 795], [72, 700], [62, 560]];
+const VALLEY = [[360, 330], [800, 330], [850, 470], [790, 560], [650, 600], [520, 575], [400, 530], [350, 430]];
+const DESERT = [[340, 690], [460, 650], [600, 668], [730, 630], [830, 690], [850, 920], [320, 920]];
+const BEACH = [[830, 380], [1100, 380], [1100, 920], [850, 920], [905, 720], [890, 590], [810, 480]];
+function drawCh1(t, B) {
+  const [bx0, by0, bx1, by1] = B;
+  let g = ctx.createLinearGradient(0, 300, 0, 900); g.addColorStop(0, '#5bb2e4'); g.addColorStop(1, '#2a6fae');
+  ctx.fillStyle = g; ctx.fillRect(bx0, 300, bx1 - bx0, by1 - 300);
+  g = ctx.createLinearGradient(0, 0, 0, 340); g.addColorStop(0, '#05071a'); g.addColorStop(1, '#2c3280');
+  ctx.fillStyle = g; ctx.fillRect(bx0, by0, bx1 - bx0, 340 - by0);
+  mStars(bx0, by0, bx1, 310, 160, t, 11);
+  // ringed planet + moon
+  ctx.beginPath(); ctx.ellipse(1010, 152, 72, 15, -0.25, PI, PI * 2); ctx.lineWidth = 8; ctx.strokeStyle = OL; ctx.stroke(); ctx.lineWidth = 4; ctx.strokeStyle = '#f4d9a8'; ctx.stroke();
+  circ(1010, 150, 40); P('#e5a36c', 3);
+  ctx.save(); circ(1010, 150, 40); ctx.clip(); ctx.fillStyle = 'rgba(150,70,40,.35)'; ctx.fillRect(968, 138, 84, 9); ctx.fillRect(968, 160, 84, 6); ctx.restore();
+  circ(1010, 150, 40); ctx.lineWidth = 3; ctx.strokeStyle = OL; ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(1010, 152, 72, 15, -0.25, 0, PI); ctx.lineWidth = 8; ctx.strokeStyle = OL; ctx.stroke(); ctx.lineWidth = 4; ctx.strokeStyle = '#f4d9a8'; ctx.stroke();
+  circ(1270, 95, 15); P('#d8dcec', 2.5); circ(1266, 92, 4); ctx.fillStyle = 'rgba(0,0,0,.15)'; ctx.fill();
+  // black hole
+  for (let i = 0; i < 4; i++) {
+    ctx.beginPath(); ctx.ellipse(1440, 108, 78 - i * 13, 22 - i * 3.5, -0.18, 0, PI * 2);
+    ctx.setLineDash([34, 14]); ctx.lineDashOffset = -t * 40 * (i + 1); ctx.lineWidth = 7 - i;
+    ctx.strokeStyle = ['#5a2a98', '#b04aff', '#ff8a4a', '#ffd08a'][i]; ctx.stroke();
+  }
+  ctx.setLineDash([]); ctx.lineDashOffset = 0;
+  circ(1440, 108, 22); ctx.fillStyle = '#000'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#d08aff'; ctx.stroke();
+  // light beam from volcano to space
+  g = ctx.createLinearGradient(0, 560, 0, 220); g.addColorStop(0, 'rgba(255,240,180,.0)'); g.addColorStop(0.5, 'rgba(255,240,180,.22)'); g.addColorStop(1, 'rgba(255,240,180,0)');
+  ctx.fillStyle = g; poly([1270, 560, 1340, 560, 1190, 230, 1120, 230]); ctx.fill();
+  // clouds band
+  for (let i = 0; i < 16; i++) {
+    const x = bx0 - 60 + i * ((bx1 - bx0 + 120) / 15) + hash(i) * 40, y = 305 + hash(i * 2.1) * 26 + Math.sin(t * 0.6 + i) * 3;
+    drawCloud(x, y, 0.75 + hash(i * 5.3) * 0.45, ['#ffffff', '#e3f0fb', '#6b8bb3']);
+  }
+  for (let i = 0; i < 46; i++) mWave(bx0 + hash(i * 1.7) * (bx1 - bx0), 390 + hash(i * 2.9) * (by1 - 390), t);
+  // boat
+  { const bx = 1010 + Math.sin(t * 0.5) * 8, by = 860 + Math.sin(t * 1.4) * 2;
+    poly([bx - 24, by - 6, bx + 24, by - 6, bx + 16, by + 6, bx - 16, by + 6]); P('#8a5a34', 2.5);
+    limb([bx, by - 6, bx, by - 40], 2.5, '#6a4a2a'); poly([bx + 2, by - 38, bx + 22, by - 12, bx + 2, by - 12]); P('#f4f0e4', 2); }
+  // continent
+  smoothPath(LAND); ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 36; ctx.stroke();
+  ctx.strokeStyle = OL; ctx.lineWidth = 26; ctx.stroke(); ctx.strokeStyle = '#f0dba2'; ctx.lineWidth = 20; ctx.stroke();
+  g = ctx.createLinearGradient(0, 350, 0, 880); g.addColorStop(0, '#94d46a'); g.addColorStop(1, '#6cae4c'); ctx.fillStyle = g; ctx.fill();
+  ctx.save(); smoothPath(LAND); ctx.clip();
+  smoothPath(VALLEY); ctx.fillStyle = '#c7ad86'; ctx.fill(); ctx.strokeStyle = 'rgba(90,60,30,.45)'; ctx.lineWidth = 3; ctx.stroke();
+  smoothPath(DESERT); ctx.fillStyle = '#efcf82'; ctx.fill(); ctx.strokeStyle = 'rgba(150,100,30,.45)'; ctx.stroke();
+  smoothPath(BEACH); ctx.fillStyle = '#f4e2ad'; ctx.fill(); ctx.strokeStyle = 'rgba(150,110,40,.35)'; ctx.stroke();
+  for (let i = 0; i < 5; i++) { const x = 400 + i * 90, y = 720 + (i % 2) * 40; ctx.beginPath(); ctx.moveTo(x - 30, y); ctx.quadraticCurveTo(x, y - 14, x + 30, y); ctx.strokeStyle = 'rgba(170,120,40,.5)'; ctx.lineWidth = 3; ctx.stroke(); }
+  for (let i = 0; i < 22; i++) { const x = 100 + hash(i * 4.1) * 280, y = 460 + hash(i * 6.7) * 360; circ(x, y, 2.6); ctx.fillStyle = ['#ffffff', '#ffd35c', '#ff8ab0'][i % 3]; ctx.fill(); }
+  ctx.beginPath(); ctx.moveTo(470, 590); ctx.lineTo(540, 560); ctx.lineTo(600, 578); ctx.lineTo(690, 548); ctx.lineTo(760, 556); ctx.strokeStyle = '#6a4a2a'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.stroke();
+  ctx.restore();
+  for (const [x, y, w, h] of [[420, 440, 42, 60], [470, 470, 60, 92], [660, 450, 62, 92], [745, 470, 46, 70], [600, 425, 50, 76]]) mMountain(x, y, w, h);
+  for (const [x, y, sc] of [[140, 560, 1], [175, 612, 1.15], [118, 660, 0.95], [300, 540, 1.05], [336, 610, 1], [262, 770, 1.1], [180, 770, 0.95], [372, 700, 0.9], [110, 480, 0.9], [220, 470, 1]]) mTree(x, y, sc);
+  poly([600, 852, 662, 772, 724, 852]); P('#e2b866', 3); poly([662, 772, 724, 852, 670, 852]); ctx.fillStyle = 'rgba(0,0,0,.14)'; ctx.fill();
+  for (const [x, y, sc] of [[460, 800, 1], [770, 760, 1.1], [560, 845, 0.85]]) mCactus(x, y, sc);
+  for (const [x, y, sc] of [[905, 640, 1], [930, 490, 0.95], [872, 770, 1.05]]) mPalm(x, y, sc, t);
+  // jungle island
+  mIsland([[1000, 700], [1040, 648], [1110, 638], [1172, 668], [1192, 730], [1142, 782], [1060, 786], [1010, 752]], '#f0dba2', '#4f9a4a');
+  for (const [x, y, sc] of [[1030, 700, 0.9], [1160, 700, 0.85], [1122, 770, 0.8]]) mPalm(x, y, sc, t);
+  ctx.beginPath(); ctx.roundRect(1072, 652, 10, 26, 2); P('#b8b0a0', 2.5); ctx.beginPath(); ctx.roundRect(1094, 658, 10, 20, 2); P('#b8b0a0', 2.5);
+  // volcano island
+  mIsland([[1218, 612], [1250, 550], [1320, 530], [1402, 550], [1432, 612], [1390, 662], [1300, 672], [1235, 650]], '#7a6a62', '#5d4f4c');
+  poly([1262, 616, 1306, 478, 1344, 478, 1388, 616]); P('#7a5048', 3);
+  poly([1325, 478, 1344, 478, 1388, 616, 1340, 616]); ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fill();
+  const lv = 0.6 + 0.4 * Math.sin(t * 3);
+  ctx.beginPath(); ctx.ellipse(1325, 479, 20, 6, 0, 0, PI * 2); ctx.fillStyle = `rgb(255,${110 + lv * 60},40)`; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = OL; ctx.stroke();
+  limb([1318, 482, 1310, 520, 1302, 566], 4, '#ff7a2a'); limb([1334, 482, 1344, 530], 3, '#ff9a3a');
+  for (let i = 0; i < 4; i++) { const k = ((t * 0.35 + i * 0.25) % 1); circ(1325 + Math.sin(t + i) * 10 + k * 20, 462 - k * 100, 9 + k * 14); ctx.fillStyle = `rgba(90,80,90,${0.55 * (1 - k)})`; ctx.fill(); }
+  // twilight rift (chapter 2 gate)
+  const open = twilightOpen(), [rx, ry] = RIFT, hov = mapHover === 'rift';
+  g = ctx.createRadialGradient(rx, ry, 4, rx, ry, 90); g.addColorStop(0, open ? 'rgba(255,170,110,.55)' : 'rgba(160,120,200,.3)'); g.addColorStop(1, 'rgba(160,80,200,0)');
+  ctx.fillStyle = g; ctx.fillRect(rx - 100, ry - 110, 200, 220);
+  ctx.save(); ctx.translate(rx, ry + Math.sin(t * 1.5) * 4);
+  ctx.beginPath(); ctx.ellipse(0, 0, 34, 58, 0, 0, PI * 2); g = ctx.createLinearGradient(0, -58, 0, 58); g.addColorStop(0, '#2a1446'); g.addColorStop(0.55, open ? '#c8503a' : '#5a3a6a'); g.addColorStop(1, open ? '#ffb86a' : '#8a6a9a');
+  ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = OL; ctx.stroke();
+  ctx.setLineDash([16, 10]); ctx.lineDashOffset = -t * 30; ctx.beginPath(); ctx.ellipse(0, 0, 42 + (hov ? 4 : 0), 66 + (hov ? 4 : 0), 0, 0, PI * 2); ctx.lineWidth = 3; ctx.strokeStyle = open ? '#ffd08a' : '#b8a8d0'; ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0;
+  if (!open) mLock(0, 4, 1.4);
+  ctx.restore();
+  outlinedText('2장 · 황혼의 세계', rx, ry + 88, 18, open ? '#ffd08a' : '#c8b8e0', OL, 5);
+}
+function drawCh2(t, B) {
+  const [bx0, by0, bx1, by1] = B, HZ = 600;
+  let g = ctx.createLinearGradient(0, 0, 0, HZ); g.addColorStop(0, '#120a2c'); g.addColorStop(0.6, '#5e2464'); g.addColorStop(1, '#f28a48');
+  ctx.fillStyle = g; ctx.fillRect(bx0, by0, bx1 - bx0, HZ - by0);
+  mStars(bx0, by0, bx1, 280, 110, t, 23);
+  ctx.beginPath(); ctx.arc(1330, 120, 34, 0, PI * 2); ctx.arc(1346, 110, 30, 0, PI * 2, true); ctx.fillStyle = '#ffe8c0'; ctx.fill('evenodd');
+  ctx.save(); ctx.beginPath(); ctx.rect(bx0, by0, bx1 - bx0, HZ - by0); ctx.clip();
+  g = ctx.createRadialGradient(800, HZ, 60, 800, HZ, 380); g.addColorStop(0, 'rgba(255,200,120,.55)'); g.addColorStop(1, 'rgba(255,120,80,0)'); ctx.fillStyle = g; ctx.fillRect(400, HZ - 380, 800, 380);
+  circ(800, HZ + 10, 170); g = ctx.createLinearGradient(0, HZ - 160, 0, HZ); g.addColorStop(0, '#ffe2a0'); g.addColorStop(1, '#ff7a4a'); ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = OL; ctx.stroke();
+  for (let i = 0; i < 4; i++) { ctx.fillStyle = 'rgba(94,36,100,.35)'; ctx.fillRect(600, HZ - 30 - i * 30, 400, 6); }
+  ctx.fillStyle = '#2a1636';
+  for (let i = 0; i < 18; i++) { const x = bx0 + i * ((bx1 - bx0) / 17), h = 30 + hash(i * 3.3) * 90, w = 16 + hash(i * 1.9) * 26; poly([x - w, HZ, x - w * 0.5, HZ - h * 0.7, x, HZ - h, x + w * 0.5, HZ - h * 0.7, x + w, HZ]); ctx.fill(); }
+  ctx.restore();
+  g = ctx.createLinearGradient(0, HZ, 0, 900); g.addColorStop(0, '#3a1f48'); g.addColorStop(1, '#170d22'); ctx.fillStyle = g; ctx.fillRect(bx0, HZ, bx1 - bx0, by1 - HZ);
+  ctx.beginPath(); ctx.moveTo(bx0, HZ); ctx.lineTo(bx1, HZ); ctx.lineWidth = 3; ctx.strokeStyle = '#ffb07a'; ctx.stroke();
+  for (let i = 0; i < 30; i++) { const x = bx0 + hash(i * 2.3) * (bx1 - bx0), y = HZ + 20 + hash(i * 5.1) * (by1 - HZ); ctx.fillStyle = `rgba(255,150,110,${0.1 + 0.1 * Math.sin(t + i)})`; ctx.fillRect(x - 20, y, 40, 2); }
+  // floating islands
+  CH2_NODES.forEach(([x, y], i) => {
+    const w = 92 + (i % 2) * 18, fy = y + 18 + Math.sin(t * 1.1 + i) * 3;
+    poly([x - w, fy, x - w * 0.55, fy + 44, x - w * 0.15, fy + 90, x + w * 0.2, fy + 60, x + w * 0.6, fy + 40, x + w, fy]); P('#3e2a52', 3);
+    ctx.beginPath(); ctx.moveTo(x - w * 0.5, fy + 22); ctx.lineTo(x + w * 0.55, fy + 20); ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(x, fy, w, 22, 0, 0, PI * 2); P('#6d5a94', 3);
+    ctx.beginPath(); ctx.ellipse(x, fy - 4, w - 10, 14, 0, PI, PI * 2); ctx.strokeStyle = 'rgba(255,190,140,.45)'; ctx.lineWidth = 3; ctx.stroke();
+    const cx = x + (i % 2 ? -w * 0.62 : w * 0.6);
+    poly([cx - 8, fy + 2, cx - 3, fy - 30, cx + 3, fy - 38, cx + 8, fy + 2]); P('#c8a0ff', 2.5);
+    poly([cx + 8, fy + 4, cx + 14, fy - 18, cx + 18, fy + 4]); P('#e8c8ff', 2);
+  });
+  mPath(CH2_NODES, () => false, '#e8d0ff');
+  if (!twilightOpen()) {
+    ctx.fillStyle = 'rgba(8,4,18,.6)'; ctx.fillRect(bx0, by0, bx1 - bx0, by1 - by0);
+    for (const [x0, y0, x1, y1] of [[140, 180, 1460, 780], [140, 780, 1460, 180]]) {
+      const n = 26, a = Math.atan2(y1 - y0, x1 - x0);
+      for (let i = 0; i <= n; i++) {
+        const x = lerp(x0, x1, i / n), y = lerp(y0, y1, i / n);
+        ctx.save(); ctx.translate(x, y); ctx.rotate(a + (i % 2 ? PI / 2 : 0) * 0);
+        ctx.beginPath(); ctx.ellipse(0, 0, 30, i % 2 ? 6 : 13, 0, 0, PI * 2); ctx.lineWidth = 9; ctx.strokeStyle = OL; ctx.stroke(); ctx.lineWidth = 5; ctx.strokeStyle = '#9aa0b8'; ctx.stroke();
+        ctx.restore();
+      }
+    }
+    mLock(800, 470, 5);
+    outlinedText('8스테이지 공허의 끝을 클리어하면 열립니다', 800, 610, 34, '#ffffff', OL, 8);
+  }
+}
+function drawMap() {
+  if (titleEl.hidden) return;
+  const saved = ctx; ctx = mctx;
+  try {
+    const t = now();
+    ctx.setTransform(mdpr, 0, 0, mdpr, 0, 0); ctx.fillStyle = '#0f1320'; ctx.fillRect(0, 0, mapc.width, mapc.height);
+    ctx.setTransform(mdpr * MS, 0, 0, mdpr * MS, mdpr * MOX, mdpr * MOY);
+    const B = mapBounds();
+    if (mapCh === 0) {
+      drawCh1(t, B);
+      mPath(CH1_NODES, i => stageState(i) === 'clear');
+      CH1_NODES.forEach(([x, y], i) => mNode(x, y, String(i + 1), STAGES[i].name, stageState(i), i === pick, mapHover === i, t));
+      const [hx, hy] = CH1_NODES[pick]; mHero(hx - 52, hy + 20, t);
+    } else {
+      drawCh2(t, B);
+      const open = twilightOpen();
+      if (open) mPath(CH2_NODES, i => stageState(ch2Idx(i)) === 'clear', 'rgba(0,0,0,0)');
+      CH2_NODES.forEach(([x, y], i) => { const st = open ? stageState(ch2Idx(i)) : 'lock', S = STAGES[ch2Idx(i)]; mNode(x, y, `2-${i + 1}`, S && open ? S.name : '???', st, open && i === pickCh2, mapHover === i, t); });
+      if (open) { const [hx, hy] = CH2_NODES[pickCh2]; mHero(hx - 56, hy + 20, t); }
+    }
+    if (mapMsg && t < mapMsg.until) { ctx.globalAlpha = Math.min(1, (mapMsg.until - t) * 3); outlinedText(mapMsg.text, 800, 850, 30, '#ffd35c', OL, 7); ctx.globalAlpha = 1; }
+  } finally { ctx = saved; curOL = OL; ctx.globalAlpha = 1; }
+}
+function renderSide() {
+  const sv = save[pickCls], C = CLASSES[pickCls], tw = twilightOpen();
+  document.getElementById('teyebrow').textContent = `2D 액션 RPG${TEST_MODE ? ' · 테스트 버전' : ''}`;
+  ttabs.innerHTML = CHAPTERS.map((c, i) => `<button class="tab${i === 1 && !tw ? ' locked' : ''}" data-ch="${i}" aria-pressed="${i === mapCh}"><span class="sub">${c.sub}</span>${c.name}${i === 1 && !tw ? ' · 잠김' : ''}</button>`).join('');
+  ttabs.querySelectorAll('.tab').forEach(b => b.onclick = () => { mapCh = +b.dataset.ch; renderSide(); });
+  const cls = Object.entries(CLASSES).map(([k, c]) => {
+    const open = clsOpen(k);
+    return `<button class="cls" data-c="${k}" aria-pressed="${k === pickCls}" ${open ? '' : 'disabled'}><b>${c.name}</b><span>${open ? c.desc : '황혼의 세계(2장)가 열리면 해금'}</span>${open ? `<span>Lv.${save[k].lvl} · STAGE ${stageNo(save[k].unlocked)}까지</span>` : ''}</button>`;
+  }).join('');
+  let stage;
+  if (mapCh === 0) {
+    const S = STAGES[pick];
+    stage = `<div class="eyebrow">STAGE ${pick + 1} · ${CHAPTERS[0].name}</div><h2>${S.name}</h2><p>${S.zones.join(' → ')}</p><p class="boss">보스 · <b>${MOBS[S.boss].name}</b></p>`;
+  } else if (tw && STAGES[ch2Idx(pickCh2)]) {
+    const S = STAGES[ch2Idx(pickCh2)];
+    stage = `<div class="eyebrow">STAGE 2-${pickCh2 + 1} · ${CHAPTERS[1].name}</div><h2>${S.name}</h2><p>${S.zones.join(' → ')}</p><p class="boss">보스 · <b>${MOBS[S.boss].name}</b></p>`;
+  } else if (tw) {
+    stage = `<div class="eyebrow">STAGE 2-${pickCh2 + 1} · ${CHAPTERS[1].name}</div><h2>???</h2><p>아직 공개되지 않은 지역입니다. 곧 열립니다.</p>`;
+  } else {
+    stage = `<div class="eyebrow">CHAPTER 2 · 잠김</div><h2>황혼의 세계</h2><p>8스테이지 <b>공허의 끝</b>에서 카이로스를 쓰러뜨리면 열립니다. 새 직업 <b>암살자</b>도 함께 해금돼요.</p>`;
+  }
+  const goIdx = mapCh === 0 ? pick : ch2Idx(pickCh2), canGo = mapCh === 0 || (tw && !!STAGES[goIdx] && stageState(goIdx) !== 'lock'), sk = C.skills;
+  const atkTxt = { sword: '달려가서 연속 공격', mage: '사거리까지 다가가 마법탄 연사', archer: '사거리까지 다가가 화살 연사', assassin: '달려가서 빠른 단검 연속 베기' }[pickCls];
+  tside.innerHTML = `
+    <div class="label">직업</div>
+    <div class="classes">${cls}</div>
+    <div class="stagecard">${stage}</div>
+    <ul class="keys">
+      <li class="wide"><kbd>우클릭</kbd> 땅: 이동 · 적: ${atkTxt}</li>
+      <li class="wide"><kbd>좌클릭</kbd> 보는 방향으로 돌진 · 쿨타임 3초</li>
+      <li><kbd>Q</kbd> ${sk.Q.name}</li><li><kbd>W</kbd> ${sk.W.name}</li>
+      <li><kbd>E</kbd> ${sk.E.name}</li><li><kbd>R</kbd> ${sk.R.name}</li>
+    </ul>
+    <div class="row">
+      <button class="btn" id="tgo" ${canGo ? '' : 'disabled'}>${canGo ? `${C.name}로 출격 · STAGE ${stageNo(goIdx)}` : mapCh === 1 && !tw ? '잠김' : '준비 중'}</button>
+      ${sv.unlocked > 0 ? '<button class="btn ghost" id="treset">처음부터</button>' : ''}
+    </div>
+    <small>${TEST_MODE ? `테스트 버전: 모든 스테이지·직업이 열려 있고, 레벨이 낮으면 Lv.${testLevel(pick)}로 맞춰 출격합니다. ` : ''}지도에서 스테이지를 눌러 고르세요. 스킬은 마우스 방향으로 나갑니다. M 키로 소리를 끄고 켭니다.</small>`;
+  tside.querySelectorAll('.cls').forEach(b => b.onclick = () => {
+    pickCls = b.dataset.c; save.cls = pickCls; writeSave(save);
+    if (!TEST_MODE) pick = Math.min(pick, save[pickCls].unlocked);
+    newGame(pick, pickCls, 1, 0); renderSide();
+  });
+  const go = tside.querySelector('#tgo');
+  if (go && canGo) go.onclick = () => {
+    save.cls = pickCls; writeSave(save);
+    let lv = sv.unlocked > 0 ? sv.lvl : 1, ex = sv.unlocked > 0 ? sv.exp : 0;
+    if (TEST_MODE && lv < testLevel(goIdx)) { lv = testLevel(goIdx); ex = 0; }
+    startStage(goIdx, pickCls, lv, ex);
   };
-  draw();
+  const r = tside.querySelector('#treset');
+  if (r) r.onclick = () => { save[pickCls] = blankSave(); writeSave(save); pick = 0; G.si = 0; renderSide(); };
+  resizeMap();
+}
+function showTitle(ch = 0) {
+  MUSIC.stop(0.5);
+  save = loadSave();
+  pickCls = save.cls || 'sword'; if (!CLASSES[pickCls] || !clsOpen(pickCls)) pickCls = 'sword';
+  pick = Math.min(save[pickCls].unlocked, CH1_COUNT - 1);
+  pickCh2 = clamp(save[pickCls].unlocked - CH1_COUNT, 0, STAGES.length - 1 - CH1_COUNT);
+  mapCh = ch;
+  newGame(pick, pickCls, 1, 0);
+  ui.hidden = true; panel.innerHTML = ''; titleEl.hidden = false;
+  renderSide();
 }
 function startStage(si, cls, lvl, exp) {
   initAudio(); if (AC && AC.state === 'suspended') AC.resume();
-  newGame(si, cls, lvl, exp); G.state = 'play'; ui.hidden = true;
-  banners.push({ text: STAGES[si].name, sub: `STAGE ${si + 1} / ${STAGES.length}`, t: 0, dur: 2.2, boss: false });
+  newGame(si, cls, lvl, exp); G.state = 'play'; ui.hidden = true; titleEl.hidden = true;
+  MUSIC.play('field', FIELD_KEY[si] || 0);
+  banners.push({ text: STAGES[si].name, sub: si < CH1_COUNT ? `STAGE ${si + 1} / ${CH1_COUNT}` : `황혼의 세계 · STAGE ${stageNo(si)}`, t: 0, dur: 2.2, boss: false });
   queueZone(0);
   for (const q of spawnQueue) q.t += 1.4;
   banners[banners.length - 1].t = -2.2;
@@ -3503,41 +4990,50 @@ function startStage(si, cls, lvl, exp) {
 function fmtTime(t) { return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`; }
 function showOver() {
   panel.innerHTML = `
-    <div class="eyebrow">GAME OVER · STAGE ${G.si + 1}</div>
+    <div class="eyebrow">GAME OVER · STAGE ${stageNo(G.si)}</div>
     <h1>쓰러졌습니다</h1>
     <p>${ST().name}의 ${ST().zones[G.cz]}에서 전투가 끝났습니다. 빨간 표시가 보이면 범위 밖으로 비켜서 피하세요. 스테이지 시작 시점의 레벨로 다시 도전합니다.</p>
     <div class="stats"><div><b>${G.kills}</b>처치</div><div><b>${G.maxCombo}</b>최대 콤보</div><div><b>${fmtTime(G.time)}</b>시간</div></div>
     <div class="row"><button class="btn" id="go">다시 도전</button><button class="btn ghost" id="home">타이틀</button></div>`;
   ui.hidden = false;
   document.getElementById('go').onclick = () => startStage(G.si, G.cls, G.startLvl, G.startExp);
-  document.getElementById('home').onclick = showTitle;
+  document.getElementById('home').onclick = () => showTitle(G.si >= CH1_COUNT ? 1 : 0);
 }
 function showClear() {
-  const si = G.si, last = si === STAGES.length - 1, cls = G.cls;
+  const si = G.si, cls = G.cls, ch1End = si === CH1_COUNT - 1, next = STAGES[si + 1] || null;
   save = loadSave();
   const sv = save[cls];
-  sv.unlocked = Math.max(sv.unlocked, Math.min(si + 1, STAGES.length - 1)); sv.lvl = hero.lvl; sv.exp = hero.exp; save.cls = cls; writeSave(save);
+  sv.unlocked = Math.max(sv.unlocked, Math.min(si + 1, STAGES.length - 1)); sv.lvl = hero.lvl; sv.exp = hero.exp; save.cls = cls;
+  if (!next) sv.lastClear = Math.max(sv.lastClear || 0, si + 1);
+  let newTw = false;
+  if (ch1End) { sv.allClear = true; if (!save.twilight) { save.twilight = true; newTw = true; } }
+  writeSave(save);
   const hurtRatio = G.dmgTaken / hero.maxHp;
   let score = 0; if (G.time < 150) score++; if (G.time < 240) score++; if (hurtRatio < 0.5) score++; if (hurtRatio < 1.2) score++; if (G.maxCombo >= 40) score++;
   const rank = score >= 5 ? 'SSS' : score >= 4 ? 'S' : score >= 3 ? 'A' : score >= 2 ? 'B' : 'C';
-  const next = last ? null : STAGES[si + 1];
+  let msg;
+  if (ch1End) msg = `<p>초원에서 시작한 여정이 공허의 끝에서 막을 내렸습니다. 하지만 공허 너머로 붉은 황혼이 번져옵니다…</p>${newTw ? '<p class="unlock"><b>2장 · 황혼의 세계</b>가 열렸습니다!<br>새 직업 <b>암살자</b>가 해금되었어요.</p>' : ''}`;
+  else if (next) msg = `<p>다음은 <b>STAGE ${stageNo(si + 1)} · ${next.name}</b>입니다. 적이 더 단단하고 빨라집니다. 현재 레벨 Lv.${hero.lvl}로 이어갑니다.</p>`;
+  else msg = `<p>황혼의 세계 다음 지역은 아직 준비 중이에요. 곧 열립니다!</p>`;
+  const toMap = ch1End || !next;
   panel.innerHTML = `
-    <div class="eyebrow">${last ? 'ALL STAGES CLEAR' : `STAGE ${si + 1} CLEAR`} · ${STAGES[si].name}</div>
+    <div class="eyebrow">${ch1End ? 'CHAPTER 1 CLEAR' : `STAGE ${stageNo(si)} CLEAR`} · ${STAGES[si].name}</div>
     <div style="display:flex;align-items:center;gap:16px;margin:8px 0 12px"><div class="rank">${rank}</div>
-    <h1 style="margin:0;font-size:36px">${last ? '공허의 끝에 도달했습니다' : `${MOBS[STAGES[si].boss].name} 격파`}</h1></div>
-    ${last ? '<p>초원에서 시작한 여정이 공허의 끝에서 막을 내렸습니다. 이제 모든 스테이지를 자유롭게 다시 도전할 수 있어요.</p>' : `<p>다음은 <b>STAGE ${si + 2} · ${next.name}</b>입니다. 적이 더 단단하고 빨라집니다. 현재 레벨 Lv.${hero.lvl}로 이어갑니다.</p>`}
+    <h1 style="margin:0;font-size:36px">${ch1End ? '공허의 끝에 도달했습니다' : `${MOBS[STAGES[si].boss].name} 격파`}</h1></div>
+    ${msg}
     <div class="stats"><div><b>${fmtTime(G.time)}</b>클리어 시간</div><div><b>${G.maxCombo}</b>최대 콤보</div><div><b>${G.dmgTaken.toLocaleString()}</b>받은 피해</div></div>
-    <div class="row">${last ? '<button class="btn" id="home">타이틀로</button>' : `<button class="btn" id="go">다음 스테이지 ▶</button><button class="btn ghost" id="home">타이틀</button>`}</div>`;
+    <div class="row">${toMap ? `<button class="btn" id="home">${ch1End ? '황혼의 세계로 ▶' : '지도로'}</button>` : `<button class="btn" id="go">다음 스테이지 ▶</button><button class="btn ghost" id="home">지도</button>`}</div>`;
   ui.hidden = false;
   const go = document.getElementById('go'); if (go) go.onclick = () => startStage(si + 1, cls, hero.lvl, hero.exp);
-  document.getElementById('home').onclick = showTitle;
+  document.getElementById('home').onclick = () => showTitle(ch1End || si >= CH1_COUNT ? 1 : 0);
 }
 
 // ---------- loop ----------
 let last = performance.now();
 function frame(t) {
   const dt = Math.min(0.033, (t - last) / 1000); last = t;
-  update(dt); render();
+  try { update(dt); if (titleEl.hidden) render(); else drawMap(); }
+  catch (err) { console.error(err); try { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; curOL = OL; } catch (_) {} }
   requestAnimationFrame(frame);
 }
 showTitle();
