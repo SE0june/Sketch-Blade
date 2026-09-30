@@ -53,6 +53,7 @@
   .btn:hover{background:#f0bd52}
   .btn.ghost{background:#2c3448;color:#e9ecf3;box-shadow:0 4px 0 #151a26;width:auto;padding-inline:14px;font-size:15px}
   .btn.ghost:hover{background:#38415a}
+  .btn.ghost{white-space:nowrap;flex:none}
   .btn:focus-visible{outline:3px solid #fff;outline-offset:2px}
   .btn:active{transform:translateY(2px);box-shadow:0 2px 0 #8a6421}
   small{display:block;margin-top:12px;color:#7f8aa3;font-size:12px;line-height:1.5}
@@ -4617,9 +4618,11 @@ cv.addEventListener('pointermove', e => {
   cv.style.cursor = hoverEnemy ? 'crosshair' : slotAt(p) ? 'pointer' : 'default';
 });
 addEventListener('pointerup', e => { if (e.button === 2 || e.pointerType !== 'mouse') mouse.rDown = false; });
-addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); tryDash(); } });
+const typing = e => e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA');
+addEventListener('keydown', e => { if (typing(e)) return; if (e.code === 'Space') { e.preventDefault(); tryDash(); } });
 addEventListener('blur', () => { mouse.rDown = false; });
 addEventListener('keydown', e => {
+  if (typing(e)) return;
   const map = { KeyQ: 'Q', KeyW: 'W', KeyE: 'E', KeyR: 'R' };
   if (map[e.code]) { e.preventDefault(); castSkill(map[e.code]); }
   if (e.code === 'KeyM') { muted = !muted; MUSIC.setMute(muted); }
@@ -4729,7 +4732,8 @@ const tside = document.getElementById('tside'), ttabs = document.getElementById(
 const MW = 1600, MH = 900;
 let MS = 1, MOX = 0, MOY = 0, mdpr = 1, mapCh = 0, pickCh2 = 0, mapHover = -1, mapMsg = null;
 const CH1_NODES = [[230, 690], [520, 770], [560, 480], [860, 575], [1090, 712], [1318, 600], [1150, 250], [1440, 205]];
-const CH2_NODES = [[250, 650], [540, 540], [830, 680], [1110, 490], [1370, 320]];
+const CH2_NODES = [[235, 690], [545, 795], [770, 590], [520, 430], [1190, 352]];
+const CH2_NAMES = ['어둠의 숲', '유령의 해안', '공포 고원', '귀신 산맥', '황혼의 성'];
 const RIFT = [1500, 470];
 const CHAPTERS = [{ name: '빛의 대륙', sub: 'CHAPTER 1' }, { name: '황혼의 세계', sub: 'CHAPTER 2' }];
 const CH2_COUNT = 5; // 2장 스테이지 5개 (내용은 추가 예정)
@@ -4951,34 +4955,96 @@ function drawCh1(t, B) {
   ctx.restore();
   outlinedText('2장 · 황혼의 세계', rx, ry + 88, 18, open ? '#ffd08a' : '#c8b8e0', OL, 5);
 }
+const LAND2 = [[70, 470], [170, 400], [300, 372], [420, 330], [560, 318], [700, 344], [820, 372], [930, 420], [1000, 500], [1010, 600], [960, 690], [900, 780], [760, 860], [600, 890], [420, 880], [260, 856], [140, 800], [72, 720], [56, 590]];
+const PLATEAU2 = [[640, 470], [800, 440], [960, 470], [1030, 560], [1000, 690], [860, 720], [700, 700], [620, 610]];
+const COAST2 = [[300, 740], [440, 730], [600, 760], [760, 740], [900, 760], [940, 900], [260, 900]];
+const MOUNT2 = [[220, 380], [520, 300], [860, 340], [760, 470], [600, 500], [420, 500], [260, 470]];
 function drawCh2(t, B) {
-  const [bx0, by0, bx1, by1] = B, HZ = 600;
-  let g = ctx.createLinearGradient(0, 0, 0, HZ); g.addColorStop(0, '#120a2c'); g.addColorStop(0.6, '#5e2464'); g.addColorStop(1, '#f28a48');
-  ctx.fillStyle = g; ctx.fillRect(bx0, by0, bx1 - bx0, HZ - by0);
-  mStars(bx0, by0, bx1, 280, 110, t, 23);
-  ctx.beginPath(); ctx.arc(1330, 120, 34, 0, PI * 2); ctx.arc(1346, 110, 30, 0, PI * 2, true); ctx.fillStyle = '#ffe8c0'; ctx.fill('evenodd');
-  ctx.save(); ctx.beginPath(); ctx.rect(bx0, by0, bx1 - bx0, HZ - by0); ctx.clip();
-  g = ctx.createRadialGradient(800, HZ, 60, 800, HZ, 380); g.addColorStop(0, 'rgba(255,200,120,.55)'); g.addColorStop(1, 'rgba(255,120,80,0)'); ctx.fillStyle = g; ctx.fillRect(400, HZ - 380, 800, 380);
-  circ(800, HZ + 10, 170); g = ctx.createLinearGradient(0, HZ - 160, 0, HZ); g.addColorStop(0, '#ffe2a0'); g.addColorStop(1, '#ff7a4a'); ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = OL; ctx.stroke();
-  for (let i = 0; i < 4; i++) { ctx.fillStyle = 'rgba(94,36,100,.35)'; ctx.fillRect(600, HZ - 30 - i * 30, 400, 6); }
-  ctx.fillStyle = '#2a1636';
-  for (let i = 0; i < 18; i++) { const x = bx0 + i * ((bx1 - bx0) / 17), h = 30 + hash(i * 3.3) * 90, w = 16 + hash(i * 1.9) * 26; poly([x - w, HZ, x - w * 0.5, HZ - h * 0.7, x, HZ - h, x + w * 0.5, HZ - h * 0.7, x + w, HZ]); ctx.fill(); }
+  const [bx0, by0, bx1, by1] = B;
+  // twilight sky + sea
+  let g = ctx.createLinearGradient(0, 0, 0, 330); g.addColorStop(0, '#120a2c'); g.addColorStop(0.55, '#5a2460'); g.addColorStop(1, '#e27a48');
+  ctx.fillStyle = g; ctx.fillRect(bx0, by0, bx1 - bx0, 340 - by0);
+  mStars(bx0, by0, bx1, 200, 110, t, 23);
+  ctx.beginPath(); ctx.arc(250, 110, 30, 0, PI * 2); ctx.arc(264, 101, 27, 0, PI * 2, true); ctx.fillStyle = '#ffe8c0'; ctx.fill('evenodd');
+  g = ctx.createRadialGradient(1190, 300, 40, 1190, 300, 380); g.addColorStop(0, 'rgba(255,190,110,.6)'); g.addColorStop(1, 'rgba(255,120,80,0)');
+  ctx.fillStyle = g; ctx.fillRect(800, by0, 800, 700);
+  circ(1190, 300, 118); g = ctx.createLinearGradient(0, 180, 0, 420); g.addColorStop(0, '#ffe2a0'); g.addColorStop(1, '#ff6a3a'); ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = OL; ctx.stroke();
+  for (let i = 0; i < 3; i++) { ctx.fillStyle = 'rgba(94,36,100,.35)'; ctx.fillRect(1070, 300 + i * 22, 240, 6); }
+  g = ctx.createLinearGradient(0, 320, 0, 900); g.addColorStop(0, '#4a2a5a'); g.addColorStop(1, '#1c1233'); ctx.fillStyle = g; ctx.fillRect(bx0, 320, bx1 - bx0, by1 - 320);
+  for (let i = 0; i < 26; i++) { const x = 1060 + hash(i * 2.3) * 260, y = 420 + hash(i * 5.1) * 420, w = 20 + hash(i) * 50; ctx.fillStyle = `rgba(255,150,100,${0.18 + 0.12 * Math.sin(t * 2 + i)})`; ctx.fillRect(x - w / 2, y, w, 3); }
+  for (let i = 0; i < 40; i++) { const x = bx0 + hash(i * 1.7 + 9) * (bx1 - bx0), y = 380 + hash(i * 2.9 + 9) * (by1 - 380), o = Math.sin(t * 2 + x * 0.05) * 3;
+    ctx.beginPath(); ctx.moveTo(x - 12, y + o); ctx.quadraticCurveTo(x - 6, y - 6 + o, x, y + o); ctx.quadraticCurveTo(x + 6, y - 6 + o, x + 12, y + o); ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(220,180,255,.35)'; ctx.lineWidth = 2.5; ctx.stroke(); }
+  for (let i = 0; i < 16; i++) {
+    const x = bx0 - 60 + i * ((bx1 - bx0 + 120) / 15) + hash(i + 3) * 40, y = 300 + hash(i * 2.1 + 3) * 24 + Math.sin(t * 0.6 + i) * 3;
+    if (x > 1040 && x < 1340) continue;
+    drawCloud(x, y, 0.7 + hash(i * 5.3 + 3) * 0.45, ['#c8a8d8', '#a888c0', '#4a3060']);
+  }
+  // ghost ship wreck on the coast sea
+  { const bx = 700 + Math.sin(t * 0.5) * 6, by = 872 + Math.sin(t * 1.2) * 2;
+    ctx.globalAlpha = 0.85; poly([bx - 30, by - 6, bx + 26, by - 10, bx + 18, by + 6, bx - 22, by + 6]); P('#5a4a5a', 2.5);
+    limb([bx - 4, by - 8, bx - 8, by - 50], 3, '#4a3a4a'); poly([bx - 6, by - 48, bx + 16, by - 34, bx + 2, by - 28, bx + 12, by - 18, bx - 6, by - 16]); P('rgba(210,220,255,.6)', 2); ctx.globalAlpha = 1; }
+  // continent
+  smoothPath(LAND2); ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(230,200,255,.28)'; ctx.lineWidth = 36; ctx.stroke();
+  ctx.strokeStyle = OL; ctx.lineWidth = 26; ctx.stroke(); ctx.strokeStyle = '#9a8aa8'; ctx.lineWidth = 20; ctx.stroke();
+  g = ctx.createLinearGradient(0, 330, 0, 880); g.addColorStop(0, '#3c5a48'); g.addColorStop(1, '#2a4436'); ctx.fillStyle = g; ctx.fill();
+  ctx.save(); smoothPath(LAND2); ctx.clip();
+  smoothPath(MOUNT2); ctx.fillStyle = '#5a4c6a'; ctx.fill(); ctx.strokeStyle = 'rgba(20,10,30,.45)'; ctx.lineWidth = 3; ctx.stroke();
+  smoothPath(PLATEAU2); ctx.fillStyle = '#8a5a5e'; ctx.fill(); ctx.strokeStyle = 'rgba(40,10,20,.45)'; ctx.stroke();
+  smoothPath(COAST2); ctx.fillStyle = '#c8c0dc'; ctx.fill(); ctx.strokeStyle = 'rgba(80,60,110,.4)'; ctx.stroke();
+  for (const [x0, y0, pts] of [[700, 520, [[30, 20], [60, 10], [90, 34]]], [820, 620, [[20, 24], [56, 14], [80, 40]]], [900, 520, [[18, 30], [40, 22]]]]) {
+    ctx.beginPath(); ctx.moveTo(x0, y0); for (const [dx, dy] of pts) ctx.lineTo(x0 + dx, y0 + dy);
+    ctx.strokeStyle = '#2a0e18'; ctx.lineWidth = 6; ctx.stroke(); ctx.strokeStyle = `rgba(210,90,255,${0.55 + 0.45 * Math.sin(t * 2 + x0)})`; ctx.lineWidth = 2.5; ctx.stroke();
+  }
+  for (let i = 0; i < 10; i++) { const x = 320 + hash(i * 3.3) * 560, y = 790 + hash(i * 7.7) * 70; ctx.beginPath(); ctx.moveTo(x - 20, y); ctx.quadraticCurveTo(x, y - 10, x + 20, y); ctx.strokeStyle = 'rgba(120,100,150,.45)'; ctx.lineWidth = 3; ctx.stroke(); }
   ctx.restore();
-  g = ctx.createLinearGradient(0, HZ, 0, 900); g.addColorStop(0, '#3a1f48'); g.addColorStop(1, '#170d22'); ctx.fillStyle = g; ctx.fillRect(bx0, HZ, bx1 - bx0, by1 - HZ);
-  ctx.beginPath(); ctx.moveTo(bx0, HZ); ctx.lineTo(bx1, HZ); ctx.lineWidth = 3; ctx.strokeStyle = '#ffb07a'; ctx.stroke();
-  for (let i = 0; i < 30; i++) { const x = bx0 + hash(i * 2.3) * (bx1 - bx0), y = HZ + 20 + hash(i * 5.1) * (by1 - HZ); ctx.fillStyle = `rgba(255,150,110,${0.1 + 0.1 * Math.sin(t + i)})`; ctx.fillRect(x - 20, y, 40, 2); }
-  // floating islands
-  CH2_NODES.forEach(([x, y], i) => {
-    const w = 92 + (i % 2) * 18, fy = y + 18 + Math.sin(t * 1.1 + i) * 3;
-    poly([x - w, fy, x - w * 0.55, fy + 44, x - w * 0.15, fy + 90, x + w * 0.2, fy + 60, x + w * 0.6, fy + 40, x + w, fy]); P('#3e2a52', 3);
-    ctx.beginPath(); ctx.moveTo(x - w * 0.5, fy + 22); ctx.lineTo(x + w * 0.55, fy + 20); ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 3; ctx.stroke();
-    ctx.beginPath(); ctx.ellipse(x, fy, w, 22, 0, 0, PI * 2); P('#6d5a94', 3);
-    ctx.beginPath(); ctx.ellipse(x, fy - 4, w - 10, 14, 0, PI, PI * 2); ctx.strokeStyle = 'rgba(255,190,140,.45)'; ctx.lineWidth = 3; ctx.stroke();
-    const cx = x + (i % 2 ? -w * 0.62 : w * 0.6);
-    poly([cx - 8, fy + 2, cx - 3, fy - 30, cx + 3, fy - 38, cx + 8, fy + 2]); P('#c8a0ff', 2.5);
-    poly([cx + 8, fy + 4, cx + 14, fy - 18, cx + 18, fy + 4]); P('#e8c8ff', 2);
-  });
-  mPath(CH2_NODES, () => false, '#e8d0ff');
+  // haunted mountains with blue ghost-fire peaks
+  for (const [x, y, w, h] of [[300, 460, 50, 74], [380, 430, 64, 108], [480, 452, 58, 96], [610, 440, 66, 112], [720, 452, 50, 80], [540, 400, 40, 60]]) {
+    poly([x - w, y, x, y - h, x + w, y]); P('#4a3e5c', 3);
+    poly([x, y - h, x + w, y, x + w * 0.15, y]); ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.fill();
+    const fy = y - h - 4, f = Math.sin(t * 6 + x) * 2;
+    ctx.beginPath(); ctx.moveTo(x - 7, fy + 6); ctx.quadraticCurveTo(x - 8, fy - 6, x + f, fy - 16); ctx.quadraticCurveTo(x + 8, fy - 5, x + 7, fy + 6); ctx.closePath(); P('#7ad8ff', 2);
+    circ(x, fy + 1, 3); ctx.fillStyle = '#e8fbff'; ctx.fill();
+  }
+  // plateau mesas
+  for (const [x, y, w, h] of [[900, 560, 50, 40], [690, 660, 40, 30], [960, 650, 34, 26]]) {
+    poly([x - w, y, x - w * 0.7, y - h, x + w * 0.7, y - h, x + w, y]); P('#9a6a6a', 3);
+    poly([x + w * 0.2, y - h, x + w * 0.7, y - h, x + w, y, x + w * 0.35, y]); ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x, y - h, w * 0.7, 6, 0, 0, PI * 2); ctx.fillStyle = '#b8847a'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = OL; ctx.stroke();
+  }
+  for (const [x, y] of [[780, 540], [860, 660]]) { limb([x, y, x + 2, y - 28], 3, '#3a2a2a'); limb([x + 1, y - 18, x + 12, y - 26], 2, '#3a2a2a'); limb([x + 1, y - 22, x - 9, y - 30], 2, '#3a2a2a'); }
+  // dark forest
+  for (const [x, y, sc] of [[120, 560, 1], [170, 610, 1.1], [110, 660, 0.95], [280, 560, 1.05], [320, 620, 1], [250, 770, 1.1], [170, 760, 0.95], [360, 690, 0.9], [100, 500, 0.9], [210, 500, 1], [380, 560, 0.9]]) mTree(x, y, sc, '#1f3f2c');
+  for (let i = 0; i < 6; i++) { if (Math.sin(t * 0.8 + i * 2.3) > 0.9) continue; const x = 110 + hash(i + 50) * 260, y = 520 + hash(i + 51) * 240; for (const ox of [0, 7]) { circ(x + ox, y, 2); ctx.fillStyle = '#d8ff6a'; ctx.fill(); } }
+  for (let i = 0; i < 14; i++) { const x = 90 + hash(i + 70) * 320 + Math.sin(t * 0.7 + i) * 10, y = 480 + hash(i + 71) * 320 + Math.sin(t + i * 2) * 8; circ(x, y, 2); ctx.fillStyle = `rgba(210,255,120,${0.4 + 0.5 * Math.sin(t * 3 + i)})`; ctx.fill(); }
+  // ghosts drifting over the coast
+  for (let i = 0; i < 4; i++) {
+    const x = 380 + i * 130 + Math.sin(t * 0.8 + i * 2) * 20, y = 760 + Math.sin(t * 1.3 + i) * 8 - (i % 2) * 20;
+    ctx.globalAlpha = 0.75; ctx.beginPath(); ctx.moveTo(x - 11, y); ctx.quadraticCurveTo(x - 12, y - 22, x, y - 22); ctx.quadraticCurveTo(x + 12, y - 22, x + 11, y);
+    ctx.lineTo(x + 7, y + 8 + Math.sin(t * 5 + i) * 2); ctx.lineTo(x + 2, y + 2); ctx.lineTo(x - 3, y + 9); ctx.lineTo(x - 7, y + 2); ctx.closePath(); P('#eef0ff', 2.5);
+    circ(x - 4, y - 12, 1.8); circ(x + 4, y - 12, 1.8); ctx.fillStyle = OL; ctx.fill(); ctx.globalAlpha = 1;
+  }
+  // rope bridge to the castle cliff
+  ctx.beginPath(); ctx.moveTo(940, 440); ctx.quadraticCurveTo(1010, 470, 1080, 430); ctx.strokeStyle = OL; ctx.lineWidth = 10; ctx.stroke(); ctx.strokeStyle = '#8a6a48'; ctx.lineWidth = 6; ctx.stroke();
+  for (let i = 0; i <= 8; i++) { const k = i / 8, x = lerp(940, 1080, k), y = (1 - k) * (1 - k) * 440 + 2 * (1 - k) * k * 470 + k * k * 430; limb([x, y - 6, x, y + 6], 3, '#6a4a2c'); }
+  // castle cliff + twilight castle
+  poly([1060, 600, 1070, 470, 1090, 410, 1150, 395, 1250, 392, 1300, 412, 1320, 470, 1330, 600]); P('#3a2a3e', 3.5);
+  poly([1250, 392, 1300, 412, 1320, 470, 1330, 600, 1260, 600, 1270, 470]); ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 3; for (const y of [450, 500, 550]) { ctx.beginPath(); ctx.moveTo(1080, y); ctx.lineTo(1310, y + 8); ctx.stroke(); }
+  const CW = '#3c2650', CR = '#5a2a5e';
+  const tower = (x, top, w, roofH) => {
+    ctx.beginPath(); ctx.rect(x - w / 2, top, w, 400 - top); P(CW, 3);
+    poly([x - w / 2 - 6, top, x, top - roofH, x + w / 2 + 6, top]); P(CR, 3);
+    limb([x, top - roofH, x, top - roofH - 14], 2, '#2a1a2a'); poly([x, top - roofH - 14, x + 12, top - roofH - 10, x, top - roofH - 6]); P('#ff8a4a', 1.5);
+    const wg = 0.6 + 0.4 * Math.sin(t * 2 + x);
+    for (let k = 0; k < 2; k++) { ctx.beginPath(); ctx.roundRect(x - 4, top + 12 + k * 22, 8, 12, [4, 4, 0, 0]); ctx.fillStyle = `rgba(255,${170 + wg * 50},90,1)`; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = OL; ctx.stroke(); }
+  };
+  ctx.beginPath(); ctx.rect(1110, 350, 170, 50); P(CW, 3);
+  for (let k = 0; k < 9; k++) { ctx.beginPath(); ctx.rect(1110 + k * 20, 340, 11, 12); P(CW, 2.5); }
+  tower(1110, 318, 30, 40); tower(1280, 322, 30, 38); tower(1235, 290, 34, 48); tower(1170, 250, 44, 66);
+  ctx.beginPath(); ctx.roundRect(1182, 368, 26, 32, [13, 13, 0, 0]); ctx.fillStyle = '#1a0e1a'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = OL; ctx.stroke();
+  for (let i = 0; i < 5; i++) { const k = (t * 0.25 + i / 5) % 1, a = k * PI * 2 + i; circ(1190 + Math.cos(a) * 150, 300 + Math.sin(a) * 40 - k * 30, 3); ctx.fillStyle = `rgba(40,20,40,${0.7 * (1 - k)})`; ctx.fill(); }
+  mPath(CH2_NODES, () => false, '#f0dcff');
   if (!twilightOpen()) {
     ctx.fillStyle = 'rgba(8,4,18,.6)'; ctx.fillRect(bx0, by0, bx1 - bx0, by1 - by0);
     for (const [x0, y0, x1, y1] of [[140, 180, 1460, 780], [140, 780, 1460, 180]]) {
@@ -5011,7 +5077,7 @@ function drawMap() {
       drawCh2(t, B);
       const open = twilightOpen();
       if (open) mPath(CH2_NODES, i => stageState(ch2Idx(i)) === 'clear', 'rgba(0,0,0,0)');
-      CH2_NODES.forEach(([x, y], i) => { const st = open ? stageState(ch2Idx(i)) : 'lock', S = STAGES[ch2Idx(i)]; mNode(x, y, `2-${i + 1}`, S && open ? S.name : '???', st, open && i === pickCh2, mapHover === i, t); });
+      CH2_NODES.forEach(([x, y], i) => { const st = open ? stageState(ch2Idx(i)) : 'lock', S = STAGES[ch2Idx(i)]; mNode(x, y, `2-${i + 1}`, open ? (S ? S.name : CH2_NAMES[i]) : '???', st, open && i === pickCh2, mapHover === i, t); });
       if (open) { const [hx, hy] = CH2_NODES[pickCh2]; mHero(hx - 56, hy + 20, t); }
     }
     if (mapMsg && t < mapMsg.until) { ctx.globalAlpha = Math.min(1, (mapMsg.until - t) * 3); outlinedText(mapMsg.text, 800, 850, 30, '#ffd35c', OL, 7); ctx.globalAlpha = 1; }
@@ -5034,7 +5100,7 @@ function renderSide() {
     const S = STAGES[ch2Idx(pickCh2)];
     stage = `<div class="eyebrow">STAGE 2-${pickCh2 + 1} · ${CHAPTERS[1].name}</div><h2>${S.name}</h2><p>${S.zones.join(' → ')}</p><p class="boss">보스 · <b>${MOBS[S.boss].name}</b></p>`;
   } else if (tw) {
-    stage = `<div class="eyebrow">STAGE 2-${pickCh2 + 1} · ${CHAPTERS[1].name}</div><h2>???</h2><p>아직 공개되지 않은 지역입니다. 곧 열립니다.</p>`;
+    stage = `<div class="eyebrow">STAGE 2-${pickCh2 + 1} · ${CHAPTERS[1].name}</div><h2>${CH2_NAMES[pickCh2]}</h2><p>아직 준비 중인 지역이에요. 곧 열립니다.</p>`;
   } else {
     stage = `<div class="eyebrow">CHAPTER 2 · 잠김</div><h2>황혼의 세계</h2><p>8스테이지 <b>공허의 끝</b>에서 카이로스를 쓰러뜨리면 열립니다. 새 직업 <b>암살자</b>도 함께 해금돼요.</p>`;
   }
