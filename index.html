@@ -1267,7 +1267,7 @@ function killEnemy(e, dir) {
     if (e.T.ai) { e.vx = 0; e.vz = 0; e.sink = 0; e.untarget = false; e.alpha = 1; e.pose = null; }
     hitstop = 0.3; shake = 18; flashT = 0.5; sfx('boom');
     for (const o of enemies) if (o !== e && o.state !== 'dead') killEnemy(o, o.x >= e.x ? 1 : -1);
-    spawnQueue = []; eproj = []; G.haz = G.haz.filter(h => h.hero); G.erupt = 0;
+    spawnQueue = []; eproj = []; G.haz = G.haz.filter(h => h.hero); G.erupt = 0; G.wall = null; G.dark = 0;
   }
 }
 function gainExp(v) {
@@ -6187,11 +6187,11 @@ function showClear() {
 
 // ---------- dungeons (보스 러시) ----------
 const DUNGEONS = [
-  { id: 'coward', name: '쫄보 전용 던전', bosses: ['gobChief', 'pharaoh', 'troll', 'kraken', 'golem'], reward: { lvl: 5 },
+  { id: 'coward', name: '쫄보 전용 던전', bosses: ['gobChief', 'pharaoh', 'troll', 'kraken', 'golem'], reward: { lvl: 2 },
     desc: '1장 보스들을 연달아 상대하는 입문용 던전. 보스를 쓰러뜨리면 체력 포션을 떨어뜨려요.', gate: { fire: '#7aff5a', glow: '140,255,120', in1: '#1a3a1a', in2: '#0a160a', stone: '#5a5070', sign: '쫄보 환영' } },
-  { id: 'mid', name: '좀 치네 던전', bosses: ['inferno', 'nebulon', 'nebTwins'], reward: { lvl: 8 },
+  { id: 'mid', name: '좀 치네 던전', bosses: ['inferno', 'nebulon', 'nebTwins'], reward: { lvl: 4 },
     desc: '이그니스와 네뷸론, 마지막엔 체력을 공유하는 작은 네뷸론 2마리 네뷸론 트윈즈가 기다립니다.', gate: { fire: '#ffb43a', glow: '255,180,80', in1: '#3a220a', in2: '#160c04', stone: '#6a5a50', sign: '좀 치네?' } },
-  { id: 'adv', name: '상급 던전', bosses: ['gorgros', 'ghostTitan', 'cloneGorgros'], reward: { lvl: 10 },
+  { id: 'adv', name: '상급 던전', bosses: ['gorgros', 'ghostTitan', 'cloneGorgros'], reward: { lvl: 5 },
     desc: '황혼의 세계 보스들이 나오는 던전. 마지막엔 분신을 불러내는 클론 고르그로스가 기다립니다.', gate: { fire: '#ff4a4a', glow: '255,80,80', in1: '#3a0a0a', in2: '#140404', stone: '#4a3a46', sign: '상급' } },
   { id: 'void', name: '공허의 던전', bosses: ['inferno', 'nebulon', 'twinKairos'], reward: { voidForm: true },
     desc: '공허에 물든 강적들의 던전. 마지막엔 체력을 공유하는 트윈 카이로스가 기다립니다.' },
@@ -6237,7 +6237,7 @@ function dgBossDown() {
   }
 }
 function dgSwap() {
-  enemies = enemies.filter(e => e.state !== 'dead'); eproj = []; G.haz = G.haz.filter(h => h.hero); G.dark = 0; G.erupt = 0;
+  enemies = enemies.filter(e => e.state !== 'dead'); eproj = []; G.haz = G.haz.filter(h => h.hero); G.dark = 0; G.erupt = 0; G.wall = null; G.under = false;
   hero.x = ZX[G.cz] + 260; hero.y = 548; hero.dest = null; hero.target = null; camX = ZX[G.cz];
   potions = potions.filter(p => !p.got).map(p => ({ ...p, x: ZX[G.cz] + 420 + (p.x % 2 ? 40 : -10), t: Math.min(p.t, 5) }));
   dgQueue(G.dg.step + 1, 1.0); G.cleared = false;
