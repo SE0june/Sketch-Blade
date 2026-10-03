@@ -924,6 +924,8 @@ function loadSave() {
   if (!s.dg) s.dg = {};
   if (!s.voidForm) s.voidForm = {};
   if (s.twilight && !s.ach.worldHero) s.ach.worldHero = 1;
+  // 마지막 스테이지를 깬 뒤 새 스테이지가 추가되면 바로 열리게 (lastClear = 깬 마지막 스테이지 다음 번호)
+  for (const c of ['sword', 'mage', 'archer', 'assassin']) { const v = s[c]; if (v.lastClear) v.unlocked = Math.max(v.unlocked, Math.min(v.lastClear, STAGES.length - 1)); }
   return s;
 }
 function writeSave(s) { try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch (e) {} }
