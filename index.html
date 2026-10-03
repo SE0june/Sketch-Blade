@@ -636,6 +636,7 @@ const STAGES = [
   // ===== 2장 · 황혼의 세계 =====
   { name: '어둠의 숲', theme: 'forest', zones: ['숲의 입구', '뒤틀린 오솔길', '고르그로스의 둥지'], mobs: ['treeSprite', 'treeGuard', 'twistedGuard'], shooter: 'forestWatcher', boss: 'gorgros' },
   { name: '유령의 해안', theme: 'ghostcoast', zones: ['안개 낀 해변', '난파선 무덤', '유령선의 정박지'], mobs: ['drownedSailor', 'ghostPirate', 'barnacleBrute'], shooter: 'lanternWraith', boss: 'ghostTitan' },
+  { name: '공포 고원', theme: 'fear', zones: ['메마른 비탈', '울부짖는 바위밭', '폭풍의 눈'], mobs: ['fearShade', 'stormKnight', 'despairZealot'], shooter: 'stormCaller', boss: 'asper' },
 ];
 const CH1_COUNT = 8;
 const stageNo = si => si < CH1_COUNT ? String(si + 1) : `2-${si - CH1_COUNT + 1}`;
@@ -694,6 +695,18 @@ const MOBS = {
     pal: { ...base, skin: '#a8b0c0', skinD: '#848ca0', tunic: '#6a7288', rope: '#3a4058', metal: '#6affd0', wood: '#4a5068', visor: '#6ae0ff' } },
   alienGunner: { name: '외계인 사수', role: 'shooter', hp: 420, dmg: 80, range: 360, speed: 115, wind: .56, s: 1.02, w: 14, exp: 50, head: 'alien', weapon: 'blaster',
     pal: { ...base, skin: '#b0a0c8', skinD: '#8f80a8', tunic: '#3a3a5a', rope: '#c0c8d8', metal: '#8a92a8', proj: '#c86aff', wood: '#3a3f55' } },
+  fearShade: { name: '공포의 망령', role: 'melee', hp: 1000, dmg: 125, range: 112, speed: 145, wind: .46, s: 1.12, w: 15, exp: 80, head: 'shade', hat: 'hood', weapon: 'scythe', ghostA: 0.82,
+    pal: { ...base, skin: '#2a2238', skinD: '#1a1426', tunic: '#3a2e52', rope: '#b88aff', hat: '#241c34', cape: '#4a2f80', eye: '#d8a8ff', metal: '#c8c0dc', wood: '#2a2236' } },
+  stormKnight: { name: '폭풍 해골기사', role: 'melee', hp: 1450, dmg: 150, range: 92, speed: 108, wind: .58, s: 1.32, w: 19, exp: 95, head: 'skeleton', hat: 'helm', weapon: 'axe',
+    pal: { ...base, skin: '#d8d4e4', skinD: '#9a94ae', tunic: '#3a3450', hat: '#4a4660', rope: '#8a6aff', metal: '#a8a0c8', wood: '#3a2e40', eye: '#c88aff' } },
+  despairZealot: { name: '절망의 광신도', role: 'melee', hp: 1100, dmg: 135, range: 126, speed: 132, wind: .5, s: 1.12, w: 15, exp: 85, head: 'shade', hat: 'horned', weapon: 'spear',
+    pal: { ...base, skin: '#3a2a3e', skinD: '#24182a', tunic: '#4a2440', rope: '#ff6ab0', hat: '#2a1a2e', cape: '#6a2a5a', eye: '#ff8ad0', metal: '#d0b8d8', wood: '#3a2a30' } },
+  stormCaller: { name: '번개 주술사', role: 'shooter', hp: 900, dmg: 140, range: 380, speed: 112, wind: .55, s: 1.08, w: 15, exp: 90, head: 'wraith', weapon: 'staff',
+    pal: { ...base, skin: '#2a2440', skinD: '#1a1630', tunic: '#2e2650', rope: '#c88aff', wood: '#3a2e4a', metal: '#b8a8e8', glow: '#e0c0ff', proj: '#c88aff' } },
+  asper: { name: '절망의 폭풍 아스페르', role: 'boss', ai: 'asper', draw: 'asper', hp: 24000, dmg: 260, range: 500, speed: 118, wind: .7, s: 1, w: 70, hw: 150, hh: 300, shadow: 120, exp: 1600,
+    pal: { d: '#160f28', m: '#2a1d4c', l: '#47357e', g: '#a86aff', b: '#e6c4ff', ol: OL } },
+  asperMini: { name: '아스페르의 분열체', role: 'melee', ai: 'asperMini', draw: 'asper', hp: 1, dmg: 0, range: 0, speed: 0, wind: 1, s: 1, w: 28, hw: 56, hh: 120, shadow: 46, exp: 0, sc: 0.42,
+    pal: { d: '#160f28', m: '#2a1d4c', l: '#47357e', g: '#a86aff', b: '#e6c4ff', ol: OL } },
   nebTwins: { name: '네뷸론 트윈즈', role: 'boss', ai: 'nebTwins', draw: 'nebulon', hw: 62, hh: 160, shadow: 62, hp: 6500, dmg: 230, range: 400, speed: 150, wind: .72, s: 1, w: 30, exp: 450, sc: 0.65, head: 'alien', hat: 'crown', weapon: 'laser',
     pal: { ...base, skin: '#9a8ac8', skinD: '#7a6aa8', tunic: '#2a1f4a', rope: '#f0c040', cape: '#5a2fa0', metal: '#ff6aff', wood: '#2a2440', proj: '#ff6aff' } },
   cloneGorgros: { name: '클론 고르그로스', role: 'boss', ai: 'cloneGorgros', draw: 'gorgros', hp: 12500, dmg: 260, range: 500, speed: 78, wind: .8, s: 1, w: 90, hw: 135, hh: 235, shadow: 150, exp: 1000,
@@ -746,6 +759,11 @@ const MOBS = {
 for (const k in MOBS) { const w = {}; for (const c in MOBS[k].pal) w[c] = '#ffffff'; w.ol = OL; MOBS[k].white = w; }
 
 const THEMES = {
+  fear: { sky: ['#0c0816', '#3a2c4c'], sun: null, clouds: ['#4a405c', '#3a3250', '#16101e'],
+    far: { t: 'range', f: '#2a2238', o: '#100c1a', par: .08, step: 110, hmin: 120, hmax: 250 },
+    near: { t: 'range', f: '#3a3046', o: '#18121e', par: .2, step: 80, hmin: 40, hmax: 120 },
+    hill: ['#423c4c', '#1e1a26'], field: '#4a4454', prop: 'gnarl',
+    ground: ['#5a5464', '#2a2632', '#504a5a'], path: ['#6e6676', '#34303c', '#625a6a'], deco: 'fear', fence: 'rocks', land: 'spire', fg: ['#3a3444', '#14101c'], part: 'storm' },
   ghostcoast: { sky: ['#0a1220', '#2c4058'], sun: [1040, 110, '#e8f4ff'], clouds: ['#5a6a80', '#46546a', '#1e2838'],
     far: { t: 'ghostships' }, sea: ['#1c3a52', '#6ac0dc'], prop: 'wreckmast',
     ground: ['#a4a6b6', '#5a5e70', '#9a9cae'], path: ['#868a9c', '#4a4e5e', '#7a7e90'], deco: 'ghostcoast', fence: 'driftwood', land: 'wreck', fg: ['#565c6c', '#1e222c'], fgRock: true, part: 'wisp' },
@@ -869,7 +887,7 @@ const rangeMul = () => hero && hero.form === 'void' ? VOIDF.range : 1;
 const HP_REGEN = 30;
 // 테스트 버전: true면 모든 스테이지가 처음부터 열려 있어요. 정식 버전에서는 false로 바꾸세요.
 const TEST_MODE = false;
-const testLevel = si => 1 + si * 3;
+const testLevel = si => si >= 10 ? 75 + (si - 10) * 5 : 1 + si * 3;
 
 // ---------- save ----------
 const SAVE_KEY = 'grassSwordsman.v3';
@@ -1163,6 +1181,13 @@ function teleEll(x, y, rx, ry, k, col) {
 }
 const inEll = (o, x, y, rx, ry) => { const dx = (o.x - x) / rx, dy = (o.y - y) / ry; return dx * dx + dy * dy <= 1; };
 function skillInvuln() { return hero.stealth > 0 || hero.state === 'dash' || (hero.skill && (hero.skill.id === 'W' || hero.skill.id === 'R')); }
+// 무적시간을 무시하는 빠른 지속 피해 (아스페르 전기톱·오라 등)
+function dotHero(d, col = '#c88aff') {
+  if (G.state !== 'play' || hero.hp <= 0 || skillInvuln()) return false;
+  hero.hp -= d; G.dmgTaken += d; addNum(hero.x + rnd(-14, 14), hero.y - 105, d.toLocaleString(), col, 20);
+  if (hero.hp <= 0) heroDie();
+  return true;
+}
 function canHitHero() { return G.state === 'play' && hero.hp > 0 && hero.inv <= 0 && !skillInvuln(); }
 function applyBurn(dmg, ticks) {
   if (G.state !== 'play' || hero.hp <= 0 || skillInvuln()) return;
@@ -1229,6 +1254,17 @@ function fallHaz(x, y, tele, dmg, o) {
 // ---------- combat ----------
 function hitEnemy(e, dmg, o = {}) {
   if (e.state === 'dead' || e.untarget) return;
+  if (e.owner) {
+    // 분열체를 때리면 본체(아스페르)의 체력이 깎여요
+    const ow = e.owner; if (ow.state === 'dead') return;
+    const crit = Math.random() < 0.15, d = Math.round(dmg * rnd(0.9, 1.1) * (crit ? 1.8 : 1)) + (hero.form === 'void' ? Math.round(dmg * VOIDF.extra) : 0);
+    ow.hp -= d; ow.hpShow = 2.5; e.flash = 0.1;
+    addNum(e.x, e.y - e.z - (e.T.hh || 80), d.toLocaleString(), crit ? '#ffd35c' : '#ffffff', crit ? 34 : 26);
+    sparkFx(e.x + rnd(-8, 8), e.y - 60 + rnd(-10, 10), crit ? 1.2 : 0.9, o.col);
+    G.combo++; G.comboT = 2.2; G.maxCombo = Math.max(G.maxCombo, G.combo); hitstop = Math.max(hitstop, o.stop ?? 0.03); sfx(crit ? 'crit' : 'hit');
+    if (ow.hp <= 0) killEnemy(ow, 1);
+    return;
+  }
   const crit = Math.random() < 0.15;
   let d = Math.round(dmg * rnd(0.9, 1.1) * (crit ? 1.8 : 1));
   e.hp -= d; e.flash = 0.1; e.hpShow = 2.5; e.lastUlt = !!o.ult && hero.cls === 'archer';
@@ -1268,6 +1304,7 @@ function killEnemy(e, dir) {
     hitstop = 0.3; shake = 18; flashT = 0.5; sfx('boom');
     for (const o of enemies) if (o !== e && o.state !== 'dead') killEnemy(o, o.x >= e.x ? 1 : -1);
     spawnQueue = []; eproj = []; G.haz = G.haz.filter(h => h.hero); G.erupt = 0; G.wall = null; G.dark = 0;
+    if (G.hurri) { G.hurri = 0; hero.z = 0; } G.storm = 0;
   }
 }
 function gainExp(v) {
@@ -1349,7 +1386,7 @@ function inAttackRange(e) {
 function moveHeroToward(tx, ty, dt) {
   const dx = tx - hero.x, dy = ty - hero.y, d = Math.hypot(dx, dy * 1.3);
   if (d < 5) return true;
-  const sp = 300 * (hero.stealth > 0 ? 1.75 : 1);
+  const sp = 300 * (hero.stealth > 0 ? 1.75 : 1) * (hero.slowT > 0 ? 0.55 : 1);
   const vx = dx / d * sp, vy = dy / d * sp * 0.72;
   hero.x += Math.abs(vx * dt) > Math.abs(dx) ? dx : vx * dt;
   hero.y += Math.abs(vy * dt) > Math.abs(dy) ? dy : vy * dt;
@@ -1364,6 +1401,7 @@ function heroTimers(dt) {
   h.dashCd = Math.max(0, h.dashCd - dt);
   if (h.stealth > 0) { h.stealth = Math.max(0, h.stealth - dt); if (h.stealth === 0) smokeFx(h.x, h.y, 0.6); }
   if (h.awake > 0) h.awake = Math.max(0, h.awake - dt);
+  if (h.slowT > 0) h.slowT = Math.max(0, h.slowT - dt);
   if (h.hp > 0) { h.mp = Math.min(h.maxMp, h.mp + 7 * dt); h.hp = Math.min(h.maxHp, h.hp + HP_REGEN * dt); }
   if (h.burn && h.burn.left > 0 && h.hp > 0 && G.state === 'play') {
     h.burn.t -= dt;
@@ -1854,6 +1892,7 @@ const BD = {
 };
 function customBoss(e, dt) {
   const B = BOSSAI[e.T.ai];
+  if (B.tick) B.tick(e, dt);
   for (const k in e.cds) e.cds[k] -= dt;
   if (e.act) { e.act.t += dt; B.acts[e.act.name](e, e.act, dt); if (e.act && e.act.done) e.act = null; return; }
   e.state = 'chase';
@@ -2821,6 +2860,213 @@ BOSSAI.gorShade = {
     },
   },
 };
+// ===== 절망의 폭풍 아스페르 (2-3 공포 고원 보스) · Lv.75 기준 밸런스 =====
+BD.aspAura = 240; BD.aspTor = 1150; BD.aspSaw = 90; BD.aspBolt = 1800; BD.aspMini = 45; BD.aspGale = 300;
+function drawMiniTornado(sx, y, sc, t, a = 1) {
+  ctx.save(); ctx.translate(sx, y); ctx.scale(sc, sc); ctx.globalAlpha = a; curOL = '#07040e';
+  for (let i = 0; i < 2; i++) { const a0 = t * 6 + i * 2; ctx.beginPath(); ctx.ellipse(0, 0, 70 - i * 20, 16 - i * 4, 0, a0, a0 + 4); ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.strokeStyle = i ? '#47357e' : '#2a1d4c'; ctx.stroke(); }
+  for (let i = 0; i < 7; i++) {
+    const k = i / 6, cy = -10 - k * 170, w = 14 + k * 62, ox = Math.sin(t * 5 + i * 0.9) * (6 + k * 10);
+    ctx.beginPath(); for (let j = 0; j <= 10; j++) { const an = PI + j / 10 * PI; ctx.lineTo(ox + Math.cos(an) * w, cy + Math.sin(an) * 9 - (j % 2 ? 5 : 0)); }
+    for (let j = 0; j <= 10; j++) { const an = j / 10 * PI; ctx.lineTo(ox + Math.cos(an) * w, cy + 9 + Math.sin(an) * 5); }
+    ctx.closePath(); P(i % 2 ? '#160f28' : '#2a1d4c', 3);
+    const ph = t * 9 + i; if (Math.sin(ph) > 0) { ctx.beginPath(); ctx.moveTo(ox + Math.cos(ph) * w * 0.6 - w * 0.3, cy + 2); ctx.lineTo(ox + Math.cos(ph) * w * 0.6 + w * 0.3, cy + 3); ctx.lineWidth = 3; ctx.strokeStyle = '#8a5ae8'; ctx.stroke(); }
+  }
+  ctx.restore(); ctx.globalAlpha = 1; curOL = OL;
+}
+function aspTornado(x, y, face, big) {
+  const rx = big ? 66 : 52;
+  haz({ dur: 3.4, y, x, hit: false,
+    update(dt, h) {
+      h.x = x + face * 440 * Math.max(0, h.t - 0.05);
+      if (h.x < ZX[G.cz] - 60 || h.x > ZX[G.cz + 1] + 60) { h.t = h.dur; return; }
+      if (G.state !== 'play' || hero.hp <= 0 || skillInvuln()) return;
+      const dx = h.x - hero.x, dy = h.y - hero.y, L = Math.hypot(dx, dy * 1.4) || 1;
+      if (L < 300 && !h.hit) { const f = 60 + 190 * (1 - L / 300); hero.x += dx / L * f * dt; hero.y += dy / L * f * 0.7 * dt; }
+      if (!h.hit && Math.abs(dx) < rx && Math.abs(dy) < 30 && canHitHero()) { h.hit = true; hurtHero(BD.aspTor, h.x, { exact: true, kb: 260 }); hero.slowT = 3; shake = Math.max(shake, 8); }
+    },
+    ent(h) { drawMiniTornado(h.x - camX, h.y, big ? 0.9 : 0.75, h.t + x * 0.01, Math.min(1, h.t * 5, (h.dur - h.t) * 3)); } });
+}
+function aspBolt(x, y, tele) {
+  haz({ dur: tele, back(h) { teleEll(x, y, 80, 32, h.t / h.dur, '#c86aff'); },
+    end() {
+      shake = Math.max(shake, 12); sfx('zap'); const seed = rnd(0, 999);
+      fx(0.4, 'front', k => { const sx = x - camX, pts = boltPath(sx, -20, y - 6, seed); ctx.globalAlpha = 1 - k; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        for (const [w, c] of [[22, 'rgba(180,110,255,.35)'], [9, '#1a0a2e'], [6, '#c88aff'], [2.5, '#ffffff']]) { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.strokeStyle = c; ctx.lineWidth = w; ctx.stroke(); }
+        ctx.beginPath(); ctx.ellipse(sx, y, 80 * (0.6 + k * 0.6), 32 * (0.6 + k * 0.6), 0, 0, PI * 2); ctx.lineWidth = 5; ctx.strokeStyle = '#e0c0ff'; ctx.stroke(); ctx.globalAlpha = 1; });
+      if (inEll(hero, x, y, 80, 32) && canHitHero()) hurtHero(BD.aspBolt, x, { exact: true, kb: 380 });
+    } });
+}
+const aspX = x => clamp(x, ZX[G.cz] + 120, ZX[G.cz + 1] - 120);
+BOSSAI.asper = {
+  ult: 'hurricane',
+  // 가까이 붙으면 폭풍에 갈려 지속 피해
+  tick(e, dt) {
+    if (e.untarget || e.state === 'intro' || e.state === 'dead' || hero.hp <= 0) return;
+    e.auraT = (e.auraT || 0) - dt;
+    if (e.auraT <= 0 && inEll(hero, e.x, e.y, 150, 58)) { e.auraT = 0.5; dotHero(BD.aspAura); }
+  },
+  move(e, dt) { const side = e.x < hero.x ? -1 : 1; moveTo(e, hero.x + side * 300, hero.y, e.speed, dt); },
+  choose(e) {
+    if (e.cds.saw === undefined) { e.cds.saw = 6; e.cds.storm = 4; e.cds.split = 14; e.cds.hur = 12; }
+    const r = Math.random();
+    if (e.p2 && e.cds.hur <= 0 && !G.hurri) { e.cds.hur = 28; return 'hurricane'; }
+    if (e.cds.storm <= 0 && !G.storm && r < 0.4) { e.cds.storm = 15; return 'storm'; }
+    if (e.cds.split <= 0 && r < 0.3) { e.cds.split = 24; return 'split'; }
+    if (e.cds.saw <= 0 && r < 0.55) { e.cds.saw = 11; return 'saw'; }
+    return 'tornado';
+  },
+  phase2(e) { bossBanner('절망 각성', e); e.cdMul *= 0.8; e.speed *= 1.15; },
+  acts: {
+    // 1. 토네이도: 전방 넓게 3줄 발사 · 끌어당김 · 맞으면 3초 슬로우
+    tornado(e, a) {
+      if (!a.init) {
+        a.init = true; a.face = hero.x > e.x ? 1 : -1; e.face = a.face; const mid = clamp(hero.y, BAND[0] + 20, BAND[1] - 20);
+        a.lanes = [clamp(mid - 95, BAND[0], BAND[1]), mid, clamp(mid + 95, BAND[0], BAND[1])];
+        haz({ dur: 0.7, back: h => { for (const y of a.lanes) teleRect(e.x, e.x + a.face * 1400, y, 30, h.t / h.dur, '#b06aff'); } });
+      }
+      e.pose = a.t < 0.7 ? 'raise' : 'throw'; e.state = 'windup';
+      if (!a.go && a.t >= 0.7) { a.go = true; sfx('boom'); shake = 8; a.lanes.forEach((y, i) => aspTornado(e.x + a.face * 90, y, a.face, i === 1)); }
+      if (a.t >= 1.3) { a.done = true; e.pose = null; e.state = 'chase'; e.atkCd = rnd(0.9, 1.4) * e.cdMul; }
+    },
+    // 2. 토네이도 돌진: 5초간 추격 · 닿으면 전기톱처럼 빠른 지속 피해
+    saw(e, a, dt) {
+      if (!a.init) { a.init = true; bossBanner('폭풍 칼날', e); e.mode = 'tornado'; a.tick = 0; }
+      e.state = a.t < 0.6 ? 'windup' : 'charge';
+      if (a.t >= 0.6 && a.t < 5.6) {
+        const dx = hero.x - e.x, dy = hero.y - e.y, d = Math.hypot(dx, dy) || 1, sp = (e.p2 ? 290 : 255) * dt;
+        e.x = aspX(e.x + dx / d * Math.min(sp, d)); e.y = clamp(e.y + dy / d * Math.min(sp, d) * 0.8, BAND[0], BAND[1]); e.face = dx > 0 ? 1 : -1; e.moving = true;
+        a.tick -= dt;
+        if (Math.abs(dx) < 72 && Math.abs(dy) < 32 && hero.hp > 0 && !skillInvuln()) {
+          hero.x += -dx / d * 40 * dt;
+          if (a.tick <= 0) { a.tick = 0.1; if (dotHero(BD.aspSaw)) { shake = Math.max(shake, 4); sparkFx(hero.x + rnd(-14, 14), hero.y - 50 + rnd(-20, 20), 0.6, '#d8b0ff'); } }
+        }
+      }
+      if (a.t >= 5.9) { a.done = true; e.mode = null; e.state = 'chase'; e.moving = false; e.atkCd = 1.0 * e.cdMul; }
+    },
+    // 3. 폭풍: 8초 동안 2초마다 무작위 번개 (다른 스킬과 동시에 진행)
+    storm(e, a) {
+      if (!a.init) {
+        a.init = true; bossBanner('절망의 폭풍', e); G.storm = 1;
+        haz({ dur: 8.4, n: 0, back(h) { const k = Math.min(1, h.t * 2, (h.dur - h.t) * 2); ctx.fillStyle = `rgba(14,8,28,${0.32 * k})`; ctx.fillRect(0, 0, W, H); },
+          update(dt, h) {
+            const idx = Math.floor((h.t - 0.4) / 2);
+            if (h.t >= 0.4 && idx >= h.n && h.n < 4) {
+              h.n++;
+              aspBolt(clamp(hero.x + rnd(-60, 60), camX + 80, camX + W - 80), clamp(hero.y + rnd(-25, 25), BAND[0], BAND[1]), 1.05);
+              for (let i = 0; i < 3; i++) aspBolt(camX + rnd(100, W - 100), rnd(BAND[0] + 10, BAND[1] - 10), 1.05 + i * 0.12);
+            }
+          },
+          end() { G.storm = 0; } });
+      }
+      e.pose = 'raise'; e.state = 'windup';
+      if (a.t >= 0.6) { a.done = true; e.pose = null; e.state = 'chase'; e.atkCd = 0.25; }
+    },
+    // 4. 분열: 작은 토네이도 3개로 갈라져 8초간 추격 (분열체를 때리면 본체가 피해)
+    split(e, a, dt) {
+      if (!a.init) {
+        a.init = true; bossBanner('분열', e); e.untarget = true; boomFx(e.x, e.y, 140, '#a86aff', 0.5); sfx('zap');
+        a.minis = [0, 1, 2].map(i => { const m = spawnEnemy('asperMini', aspX(e.x + (i - 1) * 110), clamp(e.y + (i - 1) * 50, BAND[0], BAND[1]));
+          m.z = 0; m.vz = 0; m.state = 'chase'; m.owner = e; m.maxHp = m.hp = 1e9; m.mode = 'tornado'; m.tick = 0; return m; });
+      }
+      e.alpha = Math.max(0, 1 - a.t / 0.3); e.state = 'vwind';
+      const live = a.minis.filter(m => enemies.includes(m) && m.state !== 'dead');
+      if (a.t < 8) {
+        live.forEach((m, i) => {
+          const an = a.t * 1.3 + i * 2.09, tx = hero.x + Math.cos(an) * 60, ty = hero.y + Math.sin(an) * 30;
+          const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy) || 1, sp = (190 + i * 30) * dt;
+          m.x = aspX(m.x + dx / d * Math.min(sp, d)); m.y = clamp(m.y + dy / d * Math.min(sp, d) * 0.8, BAND[0], BAND[1]); m.face = dx > 0 ? 1 : -1;
+          m.tick -= dt;
+          if (m.tick <= 0 && Math.abs(hero.x - m.x) < 46 && Math.abs(hero.y - m.y) < 24) { m.tick = 0.15; if (dotHero(BD.aspMini)) sparkFx(hero.x, hero.y - 50, 0.45, '#d8b0ff'); }
+        });
+        if (live.length) { a.cx = live.reduce((s, m) => s + m.x, 0) / live.length; a.cy = live.reduce((s, m) => s + m.y, 0) / live.length; }
+      } else {
+        live.forEach(m => { m.x = lerp(m.x, a.cx, Math.min(1, dt * 8)); m.y = lerp(m.y, a.cy, Math.min(1, dt * 8)); });
+      }
+      if (a.t >= 8.6) {
+        a.minis.forEach(m => { m.remove = true; }); e.x = aspX(a.cx ?? e.x); e.y = clamp(a.cy ?? e.y, BAND[0], BAND[1]);
+        e.alpha = 1; e.untarget = false; boomFx(e.x, e.y, 140, '#a86aff', 0.5); a.done = true; e.state = 'chase'; e.atkCd = 0.6;
+      }
+    },
+    // 5. 허리케인: 7초간 전장을 휩쓸어 플레이어를 띄우고(슬로우) 계속 공격 · 다른 스킬과 연계
+    hurricane(e, a) {
+      if (!a.init) {
+        a.init = true; bossBanner('허리케인', e); G.hurri = 1; shake = 14; sfx('boom');
+        haz({ dur: 7, gt: 1.0, back(h) {
+            const k = Math.min(1, h.t * 2, (h.dur - h.t) * 2); ctx.fillStyle = `rgba(30,16,60,${0.28 * k})`; ctx.fillRect(0, 0, W, H);
+            ctx.lineCap = 'round';
+            for (let i = 0; i < 18; i++) { const x = ((hash(i * 2.7) * 1700 + h.t * (900 + i * 30)) % 1700) - 200, y = 160 + hash(i * 5.3) * 520;
+              ctx.beginPath(); ctx.moveTo(x, y); ctx.bezierCurveTo(x + 60, y - 30, x + 140, y + 30, x + 220, y); ctx.strokeStyle = `rgba(200,170,255,${0.3 * k})`; ctx.lineWidth = 3; ctx.stroke(); }
+          },
+          update(dt, h) {
+            if (G.state !== 'play' || hero.hp <= 0) return;
+            if (!skillInvuln() || hero.state === 'dash') { hero.z = 48 + Math.sin(h.t * 4) * 10; hero.slowT = Math.max(hero.slowT || 0, 0.25); }
+            const b = G.bossRef; if (b && b.state !== 'dead') { const dx = b.x - hero.x; hero.x += Math.sign(dx) * 55 * dt; }
+            h.gt -= dt; if (h.gt <= 0) { h.gt = 1.0; if (dotHero(BD.aspGale, '#d8b0ff')) { shake = Math.max(shake, 5); sparkFx(hero.x + rnd(-20, 20), hero.y - hero.z - 60, 0.8, '#e0c4ff'); } }
+          },
+          end() { G.hurri = 0; hero.z = 0; } });
+      }
+      e.pose = 'raise'; e.state = 'windup';
+      if (a.t >= 0.9) { a.done = true; e.pose = null; e.state = 'chase'; e.atkCd = 0.3; e.cds.storm = Math.min(e.cds.storm, 0.5); }
+    },
+  },
+};
+BOSSAI.asperMini = { ult: 'none', move() {}, choose() { return null; }, acts: {} };
+function drawAsper(e) {
+  const T = e.T, sc = T.sc || 1, mini = !!T.sc, fl = e.flash > 0, t = e.t;
+  let al = e.alpha ?? 1;
+  if (e.state === 'intro') al *= clamp(1 - e.st / 1.6, 0, 1);
+  if (e.state === 'dead') al *= clamp(1 - (e.st - 0.5) / 0.8, 0, 1);
+  if (al <= 0.01) return;
+  const tor = mini || e.mode === 'tornado', spin = tor ? 3.4 : 1.2;
+  const C = fl ? { d: '#ffffff', m: '#ffffff', l: '#ffffff', g: '#ffffff', b: '#ffffff' } : { d: '#160f28', m: '#2a1d4c', l: '#47357e', g: '#a86aff', b: '#e6c4ff' };
+  ctx.save(); ctx.translate(e.x - camX, e.y - e.z); ctx.scale(sc * e.face, sc); ctx.globalAlpha = al; curOL = '#07040e';
+  // 근접 위험 범위 (본체만)
+  if (!mini && !fl) { ctx.save(); ctx.globalAlpha = al * 0.55; ctx.beginPath(); ctx.ellipse(0, 0, 150, 58, 0, 0, PI * 2); ctx.fillStyle = 'rgba(120,60,220,.16)'; ctx.fill(); ctx.setLineDash([12, 9]); ctx.lineDashOffset = -t * 40; ctx.lineWidth = 2.5; ctx.strokeStyle = '#b07aff'; ctx.stroke(); ctx.setLineDash([]); ctx.restore(); }
+  for (let i = 0; i < 3; i++) { const r = 120 - i * 32, a0 = t * spin * (1.4 + i * 0.3) + i * 2; ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.26, 0, a0, a0 + 4.2); ctx.lineWidth = 10 - i * 2; ctx.lineCap = 'round'; ctx.strokeStyle = OL; ctx.stroke(); ctx.lineWidth = 6 - i; ctx.strokeStyle = i === 1 ? C.l : C.m; ctx.stroke(); }
+  const claw = side => {
+    const fl2 = Math.sin(t * 2.2 + side) * 0.09, raise = e.pose === 'raise' ? -0.25 : e.pose === 'throw' ? 0.18 : 0;
+    ctx.save(); ctx.translate(side * 70, -178); ctx.scale(side, 1); ctx.rotate(fl2 + raise);
+    poly([0, -8, 58, -44, 118, -60, 160, -36, 146, -6, 164, 38, 138, 26, 140, 86, 118, 46, 104, 104, 90, 52, 66, 96, 62, 40, 30, 28, 8, 18]); P(C.d, 3);
+    poly([62, -34, 120, -48, 136, -26, 104, -12]); ctx.fillStyle = C.m; ctx.fill();
+    poly([74, -26, 112, -36, 100, -12]); ctx.globalAlpha = al * (0.6 + 0.3 * Math.sin(t * 5 + side)); ctx.fillStyle = C.g; ctx.fill(); ctx.globalAlpha = al;
+    for (const [x1, y1, x2, y2] of [[118, 30, 132, 70], [96, 44, 104, 88], [72, 40, 70, 80]]) { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.lineWidth = 2.5; ctx.strokeStyle = C.l; ctx.stroke(); }
+    ctx.restore();
+  };
+  if (!tor) claw(-1);
+  const N = tor ? 8 : 9, H0 = tor ? 230 : 272;
+  for (let i = 0; i < N; i++) {
+    const k = i / (N - 1), cy = -16 - k * H0, w = (tor ? 22 : 26) + k * (tor ? 82 : 104) + Math.sin(t * 3 + i) * 4, ox = Math.sin(t * 1.6 * (tor ? 2 : 1) + i * 0.8) * (8 + k * 12);
+    ctx.beginPath();
+    for (let j = 0; j <= 14; j++) { const an = PI + j / 14 * PI; ctx.lineTo(ox + Math.cos(an) * w, cy + Math.sin(an) * 13 - (j % 2 ? 7 : 0)); }
+    for (let j = 0; j <= 14; j++) { const an = j / 14 * PI; ctx.lineTo(ox + Math.cos(an) * w * 0.97, cy + 13 + Math.sin(an) * 6 + (j % 3 === 0 ? 7 : 0)); }
+    ctx.closePath(); P(i % 2 ? C.d : C.m, 3);
+    const ph = t * spin * 2 + i * 0.9;
+    if (Math.sin(ph) > -0.2) { const hx = Math.cos(ph) * w * 0.65; ctx.beginPath(); ctx.moveTo(ox + hx - w * 0.35, cy + 3); ctx.quadraticCurveTo(ox + hx, cy - 6, ox + hx + w * 0.35, cy + 5); ctx.lineWidth = 4; ctx.strokeStyle = C.l; ctx.stroke(); }
+  }
+  if (!fl) for (let v = 0; v < 2; v++) {
+    if (Math.sin(t * 9 + v * 3.3) < 0.15) continue;
+    ctx.beginPath(); let x = (v ? 30 : -24), y = -40; ctx.moveTo(x, y);
+    for (let s2 = 0; s2 < 7; s2++) { x += (hash(Math.floor(t * 8) + s2 + v * 9) - 0.5) * 50; y -= tor ? 28 : 32; ctx.lineTo(x, y); }
+    ctx.lineJoin = 'round'; ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(168,106,255,.55)'; ctx.stroke(); ctx.lineWidth = 2; ctx.strokeStyle = C.b; ctx.stroke();
+  }
+  if (!tor) {
+    const my = -232, open = e.pose === 'raise' ? 1.3 : 1;
+    ctx.beginPath(); ctx.ellipse(6, my, 58, 26 * open, 0, 0, PI * 2); ctx.fillStyle = fl ? '#fff' : 'rgba(168,106,255,.28)'; ctx.fill();
+    const tp = [[-44, 0], [-34, -22], [-24, -4], [-12, -30], [0, -6], [12, -34], [24, -6], [36, -26], [46, -2], [52, 6]];
+    ctx.beginPath(); ctx.moveTo(-48, 6); for (const [x, y] of tp) ctx.lineTo(x + 4, my + y * open); ctx.lineTo(48, 12 + my); ctx.quadraticCurveTo(4, my + 22 * open, -48, my + 6); ctx.closePath(); P(C.g, 2.5);
+    ctx.beginPath(); ctx.moveTo(-30, my + 4); for (const [x, y] of tp.slice(2, 8)) ctx.lineTo(x + 4, my + y * open * 0.55 + 4); ctx.lineTo(34, my + 8); ctx.closePath(); ctx.fillStyle = C.b; ctx.fill();
+  }
+  if (!tor) claw(1);
+  if (!mini) for (let i = 0; i < 7; i++) {
+    const an = t * 0.8 + i * 0.9, x = Math.cos(an) * (150 + (i % 3) * 22), y = -150 + Math.sin(an * 1.3 + i) * 110, r = 8 + (i % 3) * 4;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(t + i) * 0.4);
+    poly([0, -r * 1.7, r * 0.6, 0, 0, r * 1.7, -r * 0.6, 0]); P(C.m, 2); poly([0, -r * 1.1, r * 0.3, 0, 0, r * 1.1, -r * 0.3, 0]); ctx.fillStyle = C.g; ctx.fill();
+    ctx.restore();
+  }
+  if (tor && !fl) for (let i = 0; i < 5; i++) { const an = t * 10 + i * 1.3, y = -30 - i * 40; ctx.beginPath(); ctx.ellipse(0, y, 70 + i * 14, 12, 0, an, an + 1.4); ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(220,190,255,.6)'; ctx.stroke(); }
+  ctx.restore(); ctx.globalAlpha = 1; curOL = OL;
+}
 function startTsunami(e) {
   G.haz = [];
   eproj = [];
@@ -3392,6 +3638,12 @@ function drawHero0() {
     for (let i = 0; i < 7; i++) { const k = (t * 0.7 + i / 7) % 1, x = h.x - camX + Math.sin(t * 2 + i * 2.3) * 22, y = h.y - h.z - 20 - k * 90;
       circ(x, y, 2.4 * (1 - k) + 0.6); ctx.fillStyle = i % 2 ? `rgba(255,150,50,${1 - k})` : `rgba(255,220,110,${1 - k})`; ctx.fill(); }
   }
+  if (h.slowT > 0 && h.hp > 0) {
+    const t = now(), sx = h.x - camX;
+    ctx.save(); ctx.translate(sx, h.y); ctx.scale(1, 0.32); ctx.globalAlpha = Math.min(1, h.slowT * 2) * 0.75;
+    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(0, 0, 30 + i * 8, t * 3 + i * 2, t * 3 + i * 2 + 2.2); ctx.lineWidth = 4; ctx.strokeStyle = i % 2 ? '#8ac8ff' : '#c88aff'; ctx.stroke(); }
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
   if (h.state === 'stun') {
     const t = now();
     for (let i = 0; i < 3; i++) { const a = t * 5 + i * PI * 2 / 3, x = h.x - camX + Math.cos(a) * 20, y = h.y - h.z - 108 + Math.sin(a) * 6;
@@ -3756,6 +4008,7 @@ function drawMob(e) {
   const T = e.T;
   if (T.draw === 'kraken') return drawKraken(e);
   if (T.draw === 'golem') return drawGolem(e);
+  if (T.draw === 'asper') return drawAsper(e);
   if (T.draw === 'nebulon' && T.sc) {
     const cx = e.x - camX; ctx.save(); ctx.translate(cx, e.y); ctx.scale(T.sc, T.sc); ctx.translate(-cx, -e.y);
     kAlt = !e.lead;
@@ -3774,6 +4027,7 @@ function drawMob(e) {
   if (T.draw === 'ghostTitan') return drawGhostTitan(e);
   if (T.draw === 'ignis') return drawIgnis(e);
   if (T.draw === 'nebulon') return drawNebulon(e);
+  if (T.draw === 'asper') return drawAsper(e);
   const fl = e.flash > 0, pal = fl ? T.white : T.pal, ps = mobPose(e);
   curOL = OL;
   ctx.save(); ctx.translate(e.x - camX, e.y - e.z); ctx.scale(e.face * e.s, e.s);
@@ -4491,6 +4745,12 @@ function drawProp(type, x, y, s, h) {
     poly([-26, -86, 26, -92, 22, -44, 10, -52, 0, -36, -12, -48, -24, -42]); P('#48506a', 2.5);
     ctx.beginPath(); ctx.moveTo(0, -112); ctx.lineTo(42, 0); ctx.moveTo(0, -112); ctx.lineTo(-40, 0); ctx.strokeStyle = 'rgba(16,20,28,.6)'; ctx.lineWidth = 1.5; ctx.stroke();
     if (h > 0.68) { circ(0, -118, 7); ctx.fillStyle = 'rgba(120,230,255,.35)'; ctx.fill(); circ(0, -118, 3.5); ctx.fillStyle = '#bff6ff'; ctx.fill(); }
+  } else if (type === 'gnarl') {
+    curOL = '#0a0610';
+    limb([0, 0, -6, -36, 6, -70, -2, -104], 11, '#2e2634'); limb([-4, -44, -30, -62, -42, -86], 5, '#2e2634'); limb([4, -66, 30, -82, 38, -108], 5, '#2e2634');
+    limb([-30, -62, -46, -64], 3, '#2e2634'); limb([30, -82, 46, -80], 3, '#2e2634'); limb([-2, -104, -14, -124], 3.5, '#2e2634'); limb([-2, -104, 12, -122], 3, '#2e2634');
+    if (h > 0.55) { const g = 0.5 + 0.5 * Math.sin(now() * 3 + h * 9); circ(38, -110, 6); ctx.fillStyle = `rgba(190,130,255,${0.25 * g})`; ctx.fill(); circ(38, -110, 2.4); ctx.fillStyle = `rgba(230,200,255,${0.9 * g})`; ctx.fill(); }
+    if (h < 0.3) { ctx.beginPath(); ctx.moveTo(-42, -86); ctx.quadraticCurveTo(-46, -70, -40, -58); ctx.strokeStyle = 'rgba(200,190,220,.5)'; ctx.lineWidth = 1.5; ctx.stroke(); }
   } else if (type === 'darktree') {
     curOL = '#07120a';
     limb([0, 0, -3, -40, 4, -80], 12, '#3a2c22'); limb([-2, -46, -22, -66], 5, '#3a2c22'); limb([2, -60, 24, -78], 5, '#3a2c22');
@@ -4691,6 +4951,15 @@ function drawDeco(type, sx, y, h1, h3) {
       else if (h3 < 0.5) { ctx.beginPath(); ctx.ellipse(sx, y, 5 + h1 * 4, 3 + h1 * 2, 0, 0, PI * 2); curOL = '#4a4e5e'; P('#7a7e90', 1.5); curOL = OL; }
       else if (h3 < 0.56) { const g = 0.5 + 0.5 * Math.sin(now() * 3 + sx * 0.1); circ(sx, y - 16, 8); ctx.fillStyle = `rgba(120,230,255,${0.18 * g})`; ctx.fill(); circ(sx, y - 16, 3); ctx.fillStyle = `rgba(200,250,255,${0.8 * g})`; ctx.fill(); }
       else if (h3 < 0.74) stroke(sx, y, '#7e8294');
+      break;
+    case 'fear':
+      if (h3 < 0.2) { for (const o of [-6, -2, 3, 7]) { ctx.beginPath(); ctx.moveTo(sx + o, y); ctx.quadraticCurveTo(sx + o + 4, y - 8, sx + o + 9 + h1 * 4, y - 13 - (o + 6) * 0.4); ctx.lineCap = 'round'; ctx.strokeStyle = '#1a1620'; ctx.lineWidth = 4.5; ctx.stroke(); ctx.strokeStyle = '#8a8070'; ctx.lineWidth = 2; ctx.stroke(); } }
+      else if (h3 < 0.3) { limb([sx - 9, y - 2, sx + 9, y - 4], 3, '#d8d0c0'); circ(sx + 12, y - 6, 5); P('#d8d0c0', 2); circ(sx + 13, y - 7, 1.4); ctx.fillStyle = OL; ctx.fill(); }
+      else if (h3 < 0.42) { ctx.beginPath(); ctx.moveTo(sx - 12, y); ctx.lineTo(sx - 8, y - 9 - h1 * 6); ctx.lineTo(sx + 2, y - 12 - h1 * 4); ctx.lineTo(sx + 11, y - 5); ctx.lineTo(sx + 12, y); ctx.closePath(); curOL = '#18141e'; P('#4e4858', 2); curOL = OL;
+        ctx.beginPath(); ctx.moveTo(sx - 4, y - 9); ctx.lineTo(sx, y - 4); ctx.lineTo(sx - 2, y); ctx.strokeStyle = '#1e1a24'; ctx.lineWidth = 1.5; ctx.stroke(); }
+      else if (h3 < 0.48) { ctx.save(); ctx.translate(sx, y); ctx.rotate((h1 - 0.5) * 0.5); limb([0, 0, 0, -24], 3.5, '#4a3e36'); limb([-7, -16, 7, -17], 3, '#4a3e36'); ctx.restore(); }
+      else if (h3 < 0.54) { const g = 0.5 + 0.5 * Math.sin(now() * 4 + sx); circ(sx, y - 8, 7); ctx.fillStyle = `rgba(180,120,255,${0.2 * g})`; ctx.fill(); circ(sx, y - 8, 2); ctx.fillStyle = `rgba(230,200,255,${0.8 * g})`; ctx.fill(); }
+      else if (h3 < 0.72) stroke(sx, y, '#6e6676');
       break;
     case 'forest':
       if (h3 < 0.22) { ctx.save(); ctx.translate(sx, y); const s = 0.7 + h1 * 0.6; ctx.scale(s, s); curOL = '#0c1a10';
@@ -5039,6 +5308,21 @@ function drawForeground() {
     for (let i = 0; i < 18; i++) {
       const x = hash(i + 2) * W + Math.sin(tm * 0.6 + i) * 40, y = 250 + hash(i) * 420 + Math.sin(tm * 1.2 + i * 2) * 18, g = 0.5 + 0.5 * Math.sin(tm * 2 + i);
       circ(x, y, 9); ctx.fillStyle = `rgba(120,230,255,${0.12 * g})`; ctx.fill(); circ(x, y, 3); ctx.fillStyle = `rgba(200,250,255,${0.85 * g})`; ctx.fill();
+    }
+  } else if (th.part === 'storm') {
+    const vg = ctx.createRadialGradient(W / 2, H * 0.55, 240, W / 2, H * 0.55, 820); vg.addColorStop(0, 'rgba(8,4,16,0)'); vg.addColorStop(1, 'rgba(8,4,16,.55)');
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 26; i++) { const sp = 700 + hash(i * 3.3) * 500, x = ((hash(i) * 1600 + tm * sp) % 1600) - 160, y = 140 + hash(i * 7.1) * 540, L = 60 + hash(i * 2.2) * 90;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + L * 0.5, y - 6, x + L, y + 2); ctx.strokeStyle = `rgba(210,200,240,${0.12 + hash(i * 5) * 0.12})`; ctx.lineWidth = 2; ctx.stroke(); }
+    for (let i = 0; i < 70; i++) { const x = ((hash(i * 1.9) * 1400 + tm * 260) % 1400) - 60, y = ((hash(i * 4.7) * 760 + tm * 900) % 760) - 40;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 7, y + 18); ctx.strokeStyle = 'rgba(190,180,230,.22)'; ctx.lineWidth = 1.4; ctx.stroke(); }
+    const cyc = tm % 5.3, seed = Math.floor(tm / 5.3);
+    if (cyc < 0.35) {
+      const bx = 150 + hash(seed * 1.7) * 980, a = cyc < 0.08 || (cyc > 0.16 && cyc < 0.24) ? 1 : 0.35;
+      ctx.fillStyle = `rgba(220,200,255,${0.16 * a})`; ctx.fillRect(0, 0, W, H);
+      const pts = boltPath(bx, 0, 300 + hash(seed) * 60, seed); ctx.lineJoin = 'round';
+      for (const [w, c] of [[9, `rgba(190,140,255,${0.35 * a})`], [3, `rgba(240,225,255,${0.9 * a})`]]) { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.strokeStyle = c; ctx.lineWidth = w; ctx.stroke(); }
     }
   } else if (th.part === 'firefly') {
     const vg = ctx.createRadialGradient(W / 2, H * 0.55, 260, W / 2, H * 0.55, 820); vg.addColorStop(0, 'rgba(0,10,6,0)'); vg.addColorStop(1, 'rgba(0,10,6,.5)');
