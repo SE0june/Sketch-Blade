@@ -5468,9 +5468,10 @@ function drawBladeFlames(ps) {
   ctx.restore();
 }
 // ---------- 도전과제 ----------
-const BOSS_LV = [1, 1, 2, 2, 3, 3, 4, 5, 5, 6];
+// 보스 격파 도전과제 레벨 보상 (스테이지 순서대로, 없는 칸은 마지막 값)
+const BOSS_LV = [1, 1, 1, 1, 1, 2, 2, 2, 2, 3];
 const ACH = [
-  ...STAGES.map((S, i) => ({ id: 'boss_' + S.boss, name: MOBS[S.boss].name + ' 격파', desc: `STAGE ${stageNo(i)} ${S.name}의 보스를 쓰러뜨리기`, reward: { lvl: BOSS_LV[i] || 6 }, group: i < CH1_COUNT ? '1장 · 빛의 대륙' : '2장 · 황혼의 세계' })),
+  ...STAGES.map((S, i) => ({ id: 'boss_' + S.boss, name: MOBS[S.boss].name + ' 격파', desc: `STAGE ${stageNo(i)} ${S.name}의 보스를 쓰러뜨리기`, reward: { lvl: BOSS_LV[i] || BOSS_LV[BOSS_LV.length - 1] }, group: i < CH1_COUNT ? '1장 · 빛의 대륙' : '2장 · 황혼의 세계' })),
   { id: 'worldHero', name: '세계의 영웅', desc: '1장 빛의 대륙을 모두 클리어하기', reward: { cls: 'assassin' }, group: '특별 도전과제' },
   { id: 'burningSword', name: '타오르는 검', desc: '검사로 화염 군주 이그니스의 필살기를 맞고 쓰러지기', reward: { form: 'sword:fire' }, group: '특별 도전과제' },
   { id: 'voidMaster', name: '공허 마스터', desc: '공허의 검사·공허의 마법사·공허의 궁수를 모두 얻기', reward: { lvlEach: ['sword', 'mage', 'archer'], n: 10 }, group: '특별 도전과제' },
